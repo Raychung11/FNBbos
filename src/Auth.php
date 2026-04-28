@@ -72,6 +72,13 @@ final class Auth
             \redirect('login.php');
         }
         $lifetime = (int)\config('security.session_lifetime', 3600);
+        if (!empty($_SESSION['auth']['remember'])) {
+            // "Remember me" extends the idle window to 30 days. The session
+            // cookie itself is reissued at login time so it survives browser
+            // restarts; in production back this with a server-side persistent
+            // token if you need true cross-device durability.
+            $lifetime = 60 * 60 * 24 * 30;
+        }
         if (time() - (int)($_SESSION['auth']['last_seen'] ?? 0) > $lifetime) {
             self::logout();
             \flash('error', 'Session expired.');
