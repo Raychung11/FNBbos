@@ -27,6 +27,20 @@ CREATE TABLE IF NOT EXISTS brands (
   CONSTRAINT fk_brands_company FOREIGN KEY (company_id) REFERENCES companies(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- tax_profiles must be created before outlets because outlets has a FK to it.
+CREATE TABLE IF NOT EXISTS tax_profiles (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id   INT UNSIGNED NOT NULL,
+  name         VARCHAR(120) NOT NULL,
+  category     VARCHAR(40)  NOT NULL DEFAULT 'standard',
+  is_inclusive TINYINT(1)   NOT NULL DEFAULT 0,
+  is_active    TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at   DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_tp_company (company_id),
+  CONSTRAINT fk_tp_company FOREIGN KEY (company_id) REFERENCES companies(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS outlets (
   id                      INT UNSIGNED NOT NULL AUTO_INCREMENT,
   company_id              INT UNSIGNED NOT NULL,
@@ -46,8 +60,10 @@ CREATE TABLE IF NOT EXISTS outlets (
   PRIMARY KEY (id),
   UNIQUE KEY uq_outlets_company_code (company_id, code),
   KEY ix_outlets_brand (brand_id),
-  CONSTRAINT fk_outlets_company FOREIGN KEY (company_id) REFERENCES companies(id),
-  CONSTRAINT fk_outlets_brand   FOREIGN KEY (brand_id)   REFERENCES brands(id)
+  KEY ix_outlets_tax_profile (tax_profile_id),
+  CONSTRAINT fk_outlets_company     FOREIGN KEY (company_id)     REFERENCES companies(id),
+  CONSTRAINT fk_outlets_brand       FOREIGN KEY (brand_id)       REFERENCES brands(id),
+  CONSTRAINT fk_outlets_tax_profile FOREIGN KEY (tax_profile_id) REFERENCES tax_profiles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -130,21 +146,8 @@ CREATE TABLE IF NOT EXISTS platform_fee_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------------------------
--- Tax engine (configurable rates, never hard-coded)
+-- Tax engine — tax_profiles is defined earlier (before outlets).
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS tax_profiles (
-  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  company_id   INT UNSIGNED NOT NULL,
-  name         VARCHAR(120) NOT NULL,
-  category     VARCHAR(40)  NOT NULL DEFAULT 'standard',
-  is_inclusive TINYINT(1)   NOT NULL DEFAULT 0,
-  is_active    TINYINT(1)   NOT NULL DEFAULT 1,
-  created_at   DATETIME NOT NULL,
-  PRIMARY KEY (id),
-  KEY ix_tp_company (company_id),
-  CONSTRAINT fk_tp_company FOREIGN KEY (company_id) REFERENCES companies(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 CREATE TABLE IF NOT EXISTS tax_rules (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
   tax_profile_id  INT UNSIGNED NOT NULL,
@@ -163,9 +166,6 @@ CREATE TABLE IF NOT EXISTS tax_rules (
   CONSTRAINT fk_tr_outlet   FOREIGN KEY (outlet_id)      REFERENCES outlets(id),
   CONSTRAINT fk_tr_platform FOREIGN KEY (platform_id)    REFERENCES platforms(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-ALTER TABLE outlets
-  ADD CONSTRAINT fk_outlets_tax_profile FOREIGN KEY (tax_profile_id) REFERENCES tax_profiles(id);
 
 -- ----------------------------------------------------------------------------
 -- Sales import & fee calculation snapshots
