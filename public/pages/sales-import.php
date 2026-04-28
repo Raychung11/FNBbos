@@ -67,6 +67,11 @@ include __DIR__ . '/../partials/header.php';
     </div>
     <div class="form-row" style="align-self:end;"><button type="submit" class="btn btn--primary">Upload &amp; process</button></div>
   </form>
+  <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--panel-border);">
+    <strong>First time?</strong> Download the CSV template and fill in your data:
+    <a class="btn btn--ghost btn--sm" href="<?= e(url('assets/templates/sales_import_template.csv')) ?>" download>Sales import template (CSV)</a>
+    <a class="btn btn--ghost btn--sm" href="<?= e(url('assets/templates/sales_import_template_README.txt')) ?>" target="_blank">Column instructions (TXT)</a>
+  </div>
 </div>
 
 <?php if ($result && $result['errors']): ?>
