@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS sales_import_batches (
 CREATE TABLE IF NOT EXISTS sales_import_errors (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   batch_id      INT UNSIGNED NOT NULL,
-  row_number    INT UNSIGNED NOT NULL,
+  row_no        INT UNSIGNED NOT NULL,
   order_id      VARCHAR(80) NULL,
   error_code    VARCHAR(60) NOT NULL,
   message       VARCHAR(255) NOT NULL,

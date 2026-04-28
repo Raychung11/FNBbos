@@ -81,7 +81,7 @@ final class Importer
 
             $errStmt = $pdo->prepare('
                 INSERT INTO sales_import_errors
-                    (batch_id, row_number, order_id, error_code, message, created_at)
+                    (batch_id, row_no, order_id, error_code, message, created_at)
                 VALUES (?,?,?,?,?,?)');
 
             $platformLookup = self::buildLookup('platforms', 'code', 'id', $companyId);
