@@ -29,7 +29,8 @@ INSERT INTO permissions (slug, name) VALUES
   ('claims.review',       'Review and approve/reject claims'),
   ('claims.pay',          'Mark claims as paid'),
   ('reports.view',        'View and export reports'),
-  ('audit.view',          'View audit logs')
+  ('audit.view',          'View audit logs'),
+  ('demo.review',         'View and manage demo requests')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Super Admin: every permission.
@@ -43,7 +44,7 @@ INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r JOIN permissions p ON p.slug IN
     ('dashboard.view','outlets.manage','users.manage','platforms.manage','tax.manage',
      'approvals.manage','sales.import','sales.view','bank.import','claims.view',
-     'claims.review','reports.view','audit.view')
+     'claims.review','reports.view','audit.view','demo.review')
   WHERE r.slug = 'company_admin'
 ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
 

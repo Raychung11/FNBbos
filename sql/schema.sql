@@ -486,4 +486,25 @@ CREATE TABLE IF NOT EXISTS system_settings (
   UNIQUE KEY uq_ss (company_id, setting_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- Public-facing demo request form (used by the marketing landing page).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS demo_requests (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  full_name     VARCHAR(120) NOT NULL,
+  company_name  VARCHAR(160) NOT NULL,
+  email         VARCHAR(160) NOT NULL,
+  phone         VARCHAR(40)  NULL,
+  outlet_count  INT UNSIGNED NULL,
+  platforms     VARCHAR(255) NULL,
+  message       TEXT         NULL,
+  status        ENUM('new','contacted','demoed','converted','rejected') NOT NULL DEFAULT 'new',
+  ip_address    VARCHAR(60)  NULL,
+  user_agent    VARCHAR(255) NULL,
+  created_at    DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_dr_status (status, created_at),
+  KEY ix_dr_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;

@@ -19,7 +19,7 @@ $active = $active ?? '';
   <h1><?= e(config('app.name')) ?></h1>
   <span class="tag">Malaysian F&amp;B • Multi-outlet</span>
   <nav>
-    <a href="<?= e(url('index.php')) ?>"                 class="<?= $active==='dashboard'?'active':'' ?>">Dashboard</a>
+    <a href="<?= e(url('pages/dashboard.php')) ?>"       class="<?= $active==='dashboard'?'active':'' ?>">Dashboard</a>
     <div class="section">Sales</div>
     <a href="<?= e(url('pages/sales-import.php')) ?>"    class="<?= $active==='sales-import'?'active':'' ?>">Sales Import</a>
     <a href="<?= e(url('pages/sales-list.php')) ?>"      class="<?= $active==='sales-list'?'active':'' ?>">Sales Orders</a>
@@ -39,6 +39,11 @@ $active = $active ?? '';
     <div class="section">Reports</div>
     <a href="<?= e(url('pages/reports.php')) ?>"         class="<?= $active==='reports'?'active':'' ?>">Reports &amp; Exports</a>
     <a href="<?= e(url('pages/audit-logs.php')) ?>"      class="<?= $active==='audit-logs'?'active':'' ?>">Audit Logs</a>
+    <?php if (Rbac::can('demo.review')): ?>
+      <div class="section">Sales / SaaS</div>
+      <a href="<?= e(url('pages/demo-requests.php')) ?>" class="<?= $active==='demo-requests'?'active':'' ?>">Demo Requests</a>
+      <a href="<?= e(url('index.php')) ?>" target="_blank">View public site ↗</a>
+    <?php endif; ?>
   </nav>
 </aside>
 <div class="main">

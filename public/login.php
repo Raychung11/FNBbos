@@ -14,7 +14,7 @@ if (requestMethod() === 'POST') {
         flash('error', 'Email and password are required.');
     } elseif (Auth::attempt($email, $password)) {
         clearOld();
-        redirect('index.php');
+        redirect('pages/dashboard.php');
     } else {
         flash('error', 'Invalid credentials.');
         rememberOld(['email' => $email]);

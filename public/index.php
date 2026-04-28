@@ -1,110 +1,199 @@
 <?php
+/**
+ * Public marketing landing page. The authenticated dashboard now lives at
+ * /public/pages/dashboard.php. This page is reachable without login and
+ * adapts its top-right CTA based on session state (Login vs Open dashboard).
+ */
+
 require __DIR__ . '/../src/bootstrap.php';
 
-use FNBBOS\Auth;
-use FNBBOS\Rbac;
+use FNBBOS\Csrf;
 
-Auth::requireLogin();
-Rbac::require('dashboard.view');
+// Demo request form is handled by public/demo-request.php which redirects back
+// here with a flash message (?demo=ok|err).
+$demoFlash = (string)input('demo');
 
-$companyId = Auth::companyId();
-$from = (string)(input('from') ?: date('Y-m-01'));
-$to   = (string)(input('to')   ?: date('Y-m-d'));
-
-$pdo = db();
-
-function kpi(PDO $pdo, string $sql, array $args, string $col = null) {
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($args);
-    $row = $stmt->fetch();
-    if (!$row) return 0.0;
-    return $col ? (float)($row[$col] ?? 0) : (float)reset($row);
-}
-
-$grossSales   = kpi($pdo, 'SELECT COALESCE(SUM(gross_sales),0) FROM sales_orders WHERE company_id=? AND order_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$totalTax     = kpi($pdo, 'SELECT COALESCE(SUM(tax_amount),0) FROM sales_fee_calculations sfc JOIN sales_orders so ON so.id=sfc.sales_order_id WHERE so.company_id=? AND so.order_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$platformFees = kpi($pdo, 'SELECT COALESCE(SUM(commission_amount + payment_fee_amount + service_fee_amount),0) FROM sales_fee_calculations sfc JOIN sales_orders so ON so.id=sfc.sales_order_id WHERE so.company_id=? AND so.order_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$netSettle    = kpi($pdo, 'SELECT COALESCE(SUM(net_settlement_system),0) FROM sales_fee_calculations sfc JOIN sales_orders so ON so.id=sfc.sales_order_id WHERE so.company_id=? AND so.order_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$claimTotal   = kpi($pdo, 'SELECT COALESCE(SUM(amount),0) FROM claims WHERE company_id=? AND claim_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$claimApproved= kpi($pdo, 'SELECT COUNT(*) FROM claims WHERE company_id=? AND approval_status="approved" AND claim_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$claimRejected= kpi($pdo, 'SELECT COUNT(*) FROM claims WHERE company_id=? AND approval_status="rejected" AND claim_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$claimHigh    = kpi($pdo, 'SELECT COUNT(*) FROM claims WHERE company_id=? AND risk_level="high" AND claim_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$claimCritical= kpi($pdo, 'SELECT COUNT(*) FROM claims WHERE company_id=? AND risk_level="critical" AND claim_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-$leakage      = kpi($pdo, 'SELECT COALESCE(SUM(ABS(difference)),0) FROM sales_fee_calculations sfc JOIN sales_orders so ON so.id=sfc.sales_order_id WHERE so.company_id=? AND reconciliation_status IN ("over_deducted","under_deducted","fee_discrepancy","tax_discrepancy") AND so.order_date BETWEEN ? AND ?', [$companyId, $from, $to]);
-
-$topSuspect = $pdo->prepare('
-    SELECT u.name AS claimant, COUNT(*) AS hits, MAX(c.risk_score) AS max_score
-    FROM claims c JOIN users u ON u.id = c.claimant_id
-    WHERE c.company_id = ? AND c.claim_date BETWEEN ? AND ? AND c.risk_level IN ("high","critical")
-    GROUP BY u.id, u.name ORDER BY hits DESC, max_score DESC LIMIT 5');
-$topSuspect->execute([$companyId, $from, $to]);
-$suspects = $topSuspect->fetchAll();
-
-$worstOutlets = $pdo->prepare('
-    SELECT o.name, COALESCE(SUM(c.amount), 0) AS claim_paid
-    FROM outlets o
-    LEFT JOIN claims c ON c.outlet_id = o.id AND c.claim_date BETWEEN ? AND ? AND c.approval_status IN ("approved","paid")
-    WHERE o.company_id = ?
-    GROUP BY o.id, o.name ORDER BY claim_paid DESC LIMIT 5');
-$worstOutlets->execute([$from, $to, $companyId]);
-$outletList = $worstOutlets->fetchAll();
-
-$pageTitle = 'Management Dashboard';
-$active    = 'dashboard';
-include __DIR__ . '/partials/header.php';
+include __DIR__ . '/partials/site-header.php';
 ?>
-<div class="page-header">
-  <div>
-    <h2>Operations overview</h2>
-    <p>From <?= e($from) ?> to <?= e($to) ?>. Filter and drill-down across outlets, platforms, claim risk levels.</p>
+
+<!-- ============================================================ HERO -->
+<section class="hero">
+  <div class="wrap">
+    <span class="hero__eyebrow">F&amp;B Operating System for Malaysia</span>
+    <h1 class="hero__title">Run your F&amp;B group with finance-grade confidence.</h1>
+    <p class="hero__sub">
+      Centralise sales from every delivery platform, calculate SST and platform
+      fees automatically, reconcile bank settlements, and catch suspicious
+      claims before they hit your bottom line — built for Malaysian F&amp;B
+      groups operating multiple brands and outlets.
+    </p>
+    <div class="hero__cta">
+      <a class="btn btn--primary btn--lg" href="#demo">Request a demo</a>
+      <a class="btn btn--ghost btn--lg" href="#features" style="background: transparent; color: #e6edff; border-color: rgba(255,255,255,.25);">See features</a>
+    </div>
+    <div class="hero__badges">
+      <span>Configurable SST (0% / 6% / 8% / custom)</span>
+      <span>Multi-brand, multi-outlet</span>
+      <span>WhatsApp alerts via Evolution API</span>
+      <span>Built-in audit trail</span>
+    </div>
   </div>
-  <form method="get" class="toolbar">
-    <div class="form-row"><label>From</label><input type="date" name="from" value="<?= e($from) ?>"></div>
-    <div class="form-row"><label>To</label><input type="date" name="to" value="<?= e($to) ?>"></div>
-    <button class="btn btn--primary" type="submit">Apply</button>
-  </form>
-</div>
+</section>
 
-<div class="kpi-grid">
-  <div class="kpi"><div class="label">Gross sales</div><div class="value"><?= e(money($grossSales)) ?></div></div>
-  <div class="kpi"><div class="label">Platform fees</div><div class="value"><?= e(money($platformFees)) ?></div></div>
-  <div class="kpi"><div class="label">Net settlement (system)</div><div class="value"><?= e(money($netSettle)) ?></div></div>
-  <div class="kpi"><div class="label">SST / tax</div><div class="value"><?= e(money($totalTax)) ?></div></div>
-  <div class="kpi"><div class="label">Claims (period)</div><div class="value"><?= e(money($claimTotal)) ?></div></div>
-  <div class="kpi kpi--ok"><div class="label">Approved claims</div><div class="value"><?= (int)$claimApproved ?></div></div>
-  <div class="kpi kpi--warn"><div class="label">High risk claims</div><div class="value"><?= (int)$claimHigh ?></div></div>
-  <div class="kpi kpi--err"><div class="label">Critical risk claims</div><div class="value"><?= (int)$claimCritical ?></div></div>
-  <div class="kpi kpi--err"><div class="label">Profit leakage</div><div class="value"><?= e(money($leakage)) ?></div><div class="delta">From fee/tax discrepancies</div></div>
-</div>
+<!-- ============================================================ PROBLEM -->
+<section class="section">
+  <div class="wrap">
+    <div class="section__head">
+      <span class="section__eyebrow">Why this exists</span>
+      <h2 class="section__title">Multi-outlet F&amp;B groups bleed money in three places.</h2>
+      <p class="section__lead">If finance is still matching delivery statements with bank credits by hand, you are losing margin every week.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <h3>Reconciliation chaos</h3>
+        <p>GrabFood, Foodpanda, ShopeeFood weekly statements never line up cleanly with your bank receipts. Finance spends days on spreadsheets.</p>
+      </div>
+      <div class="problem-card">
+        <h3>Claim leakage</h3>
+        <p>Petty cash, supplier purchases and staff claims pile up without scrutiny. Duplicate receipts, split claims and unusual suppliers slip through.</p>
+      </div>
+      <div class="problem-card">
+        <h3>SST guesswork</h3>
+        <p>Inclusive vs exclusive, 6% vs 8%, exempt vs taxable. One wrong setting on one outlet creates a compliance headache months later.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-<div class="card">
-  <h3>Top suspicious claimants</h3>
-  <?php if (!$suspects): ?><div class="empty">No high-risk claimants in this period.</div>
-  <?php else: ?>
-    <table class="data">
-      <thead><tr><th>Claimant</th><th class="num">High/Critical claims</th><th class="num">Max risk score</th></tr></thead>
-      <tbody>
-      <?php foreach ($suspects as $s): ?>
-        <tr><td><?= e($s['claimant']) ?></td><td class="num"><?= (int)$s['hits'] ?></td><td class="num"><?= (int)$s['max_score'] ?></td></tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-</div>
+<!-- ============================================================ FEATURES -->
+<section class="section section--alt" id="features">
+  <div class="wrap">
+    <div class="section__head">
+      <span class="section__eyebrow">What you get</span>
+      <h2 class="section__title">Everything finance needs, nothing they don't.</h2>
+      <p class="section__lead">Eight production-grade modules. Every fee, every tax rate, every approval limit is configurable — never hard-coded.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature__icon">⤓</div>
+        <h3>Centralised sales import</h3>
+        <p>One CSV format, every platform: GrabFood, Foodpanda, ShopeeFood, POS, Website, WhatsApp, Manual, Catering, plus any custom platform.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">%</div>
+        <h3>Configurable fee engine</h3>
+        <p>Per-platform commission, payment-gateway fee, fixed fee, and treatment of vouchers / delivery / refunds. Effective-dated rules — old rates stay as audit history.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">∑</div>
+        <h3>SST / tax engine</h3>
+        <p>0%, 6%, 8% or any custom rate. Inclusive or exclusive. Per outlet, per platform, with effective-from dates. Switching rates is a UI change, not a deploy.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">⇄</div>
+        <h3>Bank reconciliation</h3>
+        <p>Upload bank statements. The system matches credits to expected platform settlements grouped by platform / outlet / date and flags underpayments and missing settlements.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">⚠</div>
+        <h3>AI-style claim risk scoring</h3>
+        <p>Every claim gets a 0–100 score from ten signals: amount anomaly, frequency, duplicate receipts, split claims, supplier patterns, time anomaly, budget burn, role mismatch, OCR mismatch, profit impact. Each score comes with a plain-English explanation.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">✓</div>
+        <h3>Approval workflow</h3>
+        <p>Configurable approval matrix. Below RM100 → Outlet Manager. Above RM2,000 → Director. Critical-risk claims auto-route to Finance. All configurable per claim type.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">◔</div>
+        <h3>WhatsApp &amp; email alerts</h3>
+        <p>Critical claims, missing settlements, budget overruns, abnormal purchases — pushed to your team via Evolution API or email.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">◫</div>
+        <h3>Reports &amp; audit trail</h3>
+        <p>Daily sales, platform settlement, claim summary, abnormal claims, outlet profit. CSV export ready. Append-only audit log on every state change.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-<div class="card">
-  <h3>Top loss-making outlets (by claims paid)</h3>
-  <?php if (!$outletList): ?><div class="empty">No data for this period.</div>
-  <?php else: ?>
-    <table class="data">
-      <thead><tr><th>Outlet</th><th class="num">Claims paid</th></tr></thead>
-      <tbody>
-      <?php foreach ($outletList as $o): ?>
-        <tr><td><?= e($o['name']) ?></td><td class="num"><?= e(money((float)$o['claim_paid'])) ?></td></tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-</div>
+<!-- ============================================================ HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section__head">
+      <span class="section__eyebrow">How it works</span>
+      <h2 class="section__title">Live in days, not months.</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3>Set up your structure</h3>
+        <p>Add your brands, outlets, users and roles. Each outlet gets its own SST profile, claim budget and bank account.</p>
+      </div>
+      <div class="step">
+        <h3>Configure your rules</h3>
+        <p>Plug in your platform fee rates, tax profiles and approval matrix. We ship sensible defaults — tweak only what's different.</p>
+      </div>
+      <div class="step">
+        <h3>Operate &amp; monitor</h3>
+        <p>Upload sales, sync bank statements, log claims. The dashboard surfaces leakage, suspicious claims and loss-making outlets in real time.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-<?php include __DIR__ . '/partials/footer.php'; ?>
+<!-- ============================================================ DEMO -->
+<section class="section section--alt" id="demo">
+  <div class="wrap">
+    <div class="demo">
+      <div>
+        <h2>Request a demo</h2>
+        <p>Tell us about your group. We'll set up a sandbox tenant with your outlets pre-configured and walk you through a live reconciliation in under 30 minutes.</p>
+        <ul>
+          <li>Sandbox tenant with sample data</li>
+          <li>Live walkthrough of sales import + risk scoring</li>
+          <li>Custom fee rules for the platforms you actually use</li>
+          <li>No credit card, no commitment</li>
+        </ul>
+      </div>
+      <form class="demo-form" method="post" action="<?= e(url('demo-request.php')) ?>">
+        <?= Csrf::field() ?>
+        <?php if ($demoFlash === 'ok'): ?>
+          <div class="alert alert--ok">Thanks — we'll be in touch within one business day.</div>
+        <?php elseif ($demoFlash === 'err'): ?>
+          <div class="alert alert--error">Something went wrong. Please check the form and try again.</div>
+        <?php endif; ?>
+        <div class="grid2">
+          <div class="row"><label>Full name *</label><input type="text" name="full_name" required maxlength="120"></div>
+          <div class="row"><label>Company *</label><input type="text" name="company_name" required maxlength="160"></div>
+        </div>
+        <div class="grid2">
+          <div class="row"><label>Work email *</label><input type="email" name="email" required maxlength="160"></div>
+          <div class="row"><label>Phone (WhatsApp)</label><input type="text" name="phone" maxlength="40"></div>
+        </div>
+        <div class="grid2">
+          <div class="row"><label>Number of outlets</label>
+            <select name="outlet_count">
+              <option value="">Select…</option>
+              <option value="1">1</option>
+              <option value="3">2–5</option>
+              <option value="10">6–15</option>
+              <option value="30">16–50</option>
+              <option value="100">50+</option>
+            </select>
+          </div>
+          <div class="row"><label>Platforms used</label>
+            <input type="text" name="platforms" placeholder="e.g. GrabFood, Foodpanda, POS" maxlength="255">
+          </div>
+        </div>
+        <div class="row"><label>Anything we should know?</label><textarea name="message" maxlength="2000" placeholder="Pain points, urgency, current finance setup…"></textarea></div>
+        <!-- honeypot for bots -->
+        <div class="hp" aria-hidden="true"><label>Leave this empty</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+        <button class="btn btn--primary btn--lg" type="submit">Request my demo</button>
+        <p style="font-size:12px;color:var(--site-ink-soft);margin-top:10px;">By submitting you consent to be contacted about a demo. We don't share your details.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<?php include __DIR__ . '/partials/site-footer.php'; ?>

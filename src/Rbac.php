@@ -63,7 +63,7 @@ final class Rbac
         if (!self::can($permission)) {
             http_response_code(403);
             echo '<h1>403 — Forbidden</h1><p>You do not have permission to access this page.</p>';
-            echo '<p><a href="' . \e(\url('index.php')) . '">Back to dashboard</a></p>';
+            echo '<p><a href="' . \e(\url('pages/dashboard.php')) . '">Back to dashboard</a></p>';
             exit;
         }
     }
