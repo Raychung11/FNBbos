@@ -111,18 +111,31 @@ function flash_drain(): array
 
 /**
  * Read an app_settings value, falling back to $default if the key is unset.
- * Cached per-request. Pass force-reload by calling setting_reload().
+ * Cached per-request via _setting_cache().
  */
 function setting(string $key, $default = null)
 {
+    $cache = _setting_cache();
+    return array_key_exists($key, $cache) ? $cache[$key] : $default;
+}
+
+/**
+ * Internal: returns the cached settings map, lazily reloading on first call
+ * after _setting_cache(true) clears it.
+ *
+ * @return array<string,mixed>
+ */
+function _setting_cache(bool $clear = false): array
+{
     static $cache = null;
+    if ($clear) {
+        $cache = null;
+        return [];
+    }
     if ($cache === null) {
         $cache = setting_reload();
     }
-    if (array_key_exists($key, $cache)) {
-        return $cache[$key];
-    }
-    return $default;
+    return $cache;
 }
 
 /**
@@ -163,6 +176,71 @@ function setting_cast(?string $raw, string $type)
             return $raw; // string/color/path
     }
 }
+
+/**
+ * Upsert an app_settings row. Cleared from the per-request cache afterwards
+ * so the next setting() call picks up the new value.
+ */
+function setting_set(string $key, $value, string $type = 'string'): void
+{
+    if (is_array($value)) {
+        $raw  = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $type = 'json';
+    } elseif (is_bool($value)) {
+        $raw  = $value ? '1' : '0';
+        $type = 'bool';
+    } else {
+        $raw = (string)$value;
+    }
+
+    $stmt = db()->prepare(
+        'INSERT INTO app_settings
+           (company_id, key_name, value_text, value_type, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE
+           value_text = VALUES(value_text),
+           value_type = VALUES(value_type),
+           updated_by = VALUES(updated_by),
+           updated_at = NOW()'
+    );
+    $stmt->execute([
+        company_id(),
+        $key,
+        $raw,
+        $type,
+        $_SESSION['user']['id'] ?? null,
+    ]);
+
+    // Force the next setting() read to hit the database.
+    setting_cache_clear();
+}
+
+/**
+ * Drop the per-request settings cache. Called after writes.
+ */
+function setting_cache_clear(): void
+{
+    _setting_cache(true);
+}
+
+/**
+ * Read the current company row, cached per-request. Source of truth for
+ * company name + tax/registration numbers used in PDFs and the UI header.
+ *
+ * @return array<string, mixed>
+ */
+function company_record(): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $stmt = db()->prepare('SELECT * FROM companies WHERE id = ? LIMIT 1');
+    $stmt->execute([company_id()]);
+    $cache = $stmt->fetch() ?: [];
+    return $cache;
+}
+
 
 /**
  * Resolve the active company id from config. Centralised so v2 multi-company

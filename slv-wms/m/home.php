@@ -13,7 +13,7 @@ require_login();
 
 $user    = current_user();
 $role    = $user['role'] ?? 'viewer';
-$company = setting('brand.company_name', 'SLV Group Sdn. Bhd.');
+$company = company_record()['name'] ?? setting('brand.company_name', 'SLV Group Sdn. Bhd.');
 $primary = setting('brand.primary_color', '#6D28D9');
 
 $accessible_ids = user_warehouse_ids();

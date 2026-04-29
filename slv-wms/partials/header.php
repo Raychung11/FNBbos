@@ -8,7 +8,7 @@
 if (!isset($PAGE_TITLE)) {
     $PAGE_TITLE = 'SLV WMS';
 }
-$company   = setting('brand.company_name',  'SLV Group Sdn. Bhd.');
+$company   = company_record()['name'] ?? setting('brand.company_name', 'SLV Group Sdn. Bhd.');
 $primary   = setting('brand.primary_color', '#6D28D9');
 $secondary = setting('brand.secondary_color', '#1F2937');
 $accent    = setting('brand.accent_color',  '#F59E0B');

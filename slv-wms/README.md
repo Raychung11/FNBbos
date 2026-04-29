@@ -3,12 +3,12 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> This repository directory is the **Phase 0 foundation drop**. Subsequent
-> phases will land alongside it without breaking existing files.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)**.
+> Subsequent phases land alongside without breaking existing files.
 
 ---
 
-## Phase 0 — what's in this drop
+## Phase 0 — foundation
 
 | Layer            | What ships                                                                 |
 |------------------|----------------------------------------------------------------------------|
@@ -21,8 +21,22 @@ shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 | Mobile (PWA)     | `m/login.php`, `m/home.php`, `manifest.json`, `service-worker.js`          |
 | Hardening        | `.htaccess`, sensitive folders denied                                      |
 
-**Phase 0 does NOT include** any product / inventory / GRN / pick / invoice
-flows. Those land in Phase 1+ per `Section 12 — BUILD ORDER` of CLAUDE.md.
+## Phase 1 — settings backend
+
+| Layer                  | What ships                                                                                |
+|------------------------|-------------------------------------------------------------------------------------------|
+| Settings landing       | `pages/settings/index.php` + `partials/settings_nav.php`                                  |
+| Branding               | `pages/settings/branding.php` — company info, theme colours, logo upload                   |
+| Document numbering     | `pages/settings/numbering.php` — edit `format_template` + reset_yearly with live preview   |
+| Tax codes              | `pages/settings/tax_codes.php` — CRUD                                                      |
+| Tax groups             | `pages/settings/tax_groups.php` — CRUD + tax-code membership                               |
+| Email (SMTP)           | `pages/settings/smtp.php` — host/port/secure/auth + notification toggles                   |
+| Warehouses             | `pages/warehouses/index.php`, `create.php`, `edit.php`                                     |
+| Users & access         | `pages/users/index.php`, `create.php`, `edit.php` (role + per-warehouse grants)            |
+| Helpers                | `setting_set()`, `setting_cache_clear()`, `company_record()` added to `lib/helpers.php`    |
+
+**Still pending** (Phase 2+): products / barcodes / categories / bins /
+suppliers / customers / GRN / picking / invoicing / FIFO engine / transfers / reports.
 
 ---
 
@@ -67,8 +81,9 @@ Default seed:
    or iOS Safari. After login you should see the mobile task tiles (most
    marked "ships in Phase X").
 
-### After-login smoke checks (Phase 0 acceptance)
+### After-login smoke checks
 
+**Phase 0 acceptance:**
 - [ ] `/login.php` accepts `admin@slv.local` / `ChangeMe!2026`.
 - [ ] `/index.php` shows the dashboard with warehouse selector.
 - [ ] Warehouse selector saves to session and reloads with the choice intact.
@@ -78,7 +93,16 @@ Default seed:
 - [ ] `https://your-domain/config/app.php` returns 404 (blocked by .htaccess).
 - [ ] `https://your-domain/lib/db.php`     returns 404 (blocked by .htaccess).
 
-If any check fails, do not move on to Phase 1 — file an issue with the symptom and the relevant log line.
+**Phase 1 acceptance:**
+- [ ] `/pages/settings/index.php` shows seven cards (only super_admin sees this).
+- [ ] **Branding:** edit company name + colours + upload a PNG logo. Save reloads, header shows the new colour and logo.
+- [ ] **Numbering:** edit `INV` template to `INV/{warehouse_code}/{YY}/{seq:5}` and the next-preview column updates immediately.
+- [ ] **Tax codes:** create a `TST` code at 5%, edit it, then delete it (cannot delete if it's used by a group).
+- [ ] **Tax groups:** create a group `STD2` with `SST6` selected; the codes column shows `SST6` in the list.
+- [ ] **SMTP:** save host `smtp.hostinger.com`, port `587`, encryption `tls`, sender details. Reload the page → password is masked, host/port persist.
+- [ ] **Warehouses:** create `WH02 — Warehouse Two`. Toggle status. Edit address. Code uniqueness enforced.
+- [ ] **Users:** create a user with role `picker` and grant access only to `WH02`. Login as that user → only `WH02` shows in the dashboard selector.
+- [ ] Self-edit guard: as `admin@slv.local`, the role dropdown is locked to `super_admin` and status is forced `ACTIVE`.
 
 ---
 
@@ -116,9 +140,9 @@ If any check fails, do not move on to Phase 1 — file an issue with the symptom
 │   └── footer.php       ✅
 ├── pages/
 │   ├── dashboard.php    ✅ Phase 0 skeleton
-│   ├── settings/        ⏳ Phase 1
-│   ├── warehouses/      ⏳ Phase 1
-│   ├── users/           ⏳ Phase 1
+│   ├── settings/        ✅ Phase 1 (branding/numbering/tax/smtp)
+│   ├── warehouses/      ✅ Phase 1
+│   ├── users/           ✅ Phase 1
 │   ├── products/        ⏳ Phase 2
 │   ├── bins/            ⏳ Phase 2
 │   ├── grn/             ⏳ Phase 4
@@ -171,6 +195,8 @@ If any check fails, do not move on to Phase 1 — file an issue with the symptom
 
 ---
 
-## Next: Phase 1
+## Next: Phase 2
 
-Phase 1 will add the **Settings backend** (branding upload, document-number editor, tax codes & groups CRUD, SMTP, warehouse master CRUD, user & warehouse-access management). Hold here until Phase 0 deploys cleanly.
+Phase 2 will add **Other master data** — categories, products + barcodes,
+zones / racks / bins, suppliers, customers, plus their CSV importers (chunked).
+Hold here until Phase 1 deploys cleanly on Hostinger.

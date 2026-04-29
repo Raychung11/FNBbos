@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$company = setting('brand.company_name', 'SLV Group Sdn. Bhd.');
+$company = company_record()['name'] ?? setting('brand.company_name', 'SLV Group Sdn. Bhd.');
 $primary = setting('brand.primary_color', '#6D28D9');
 ?>
 <!doctype html>
