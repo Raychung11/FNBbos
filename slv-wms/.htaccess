@@ -1,0 +1,21 @@
+# SLV WMS — Apache root .htaccess (Hostinger shared)
+# Purpose: deny access to non-public folders & sensitive files; harden headers.
+
+Options -Indexes
+DirectoryIndex index.php
+
+# Send security headers (silently no-ops if mod_headers is off).
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
+</IfModule>
+
+# Block dotfiles + composer/npm artefacts.
+<FilesMatch "(^\.|composer\.(json|lock)|package(-lock)?\.json|README\.md)$">
+  Require all denied
+</FilesMatch>
+
+# Block sensitive folders entirely.
+RedirectMatch 404 ^/(config|lib|migrations|partials|storage)(/|$)
