@@ -47,6 +47,13 @@ return [
             'enabled' => false,
             'from'    => 'no-reply@example.com',
         ],
+        // Where the SaaS operator wants demo-request alerts to be delivered.
+        // Leave channels empty to skip; entries here flow into Notifier::dispatch.
+        'operator_alerts' => [
+            'email_to'    => '',          // e.g. 'sales@yourdomain.com'
+            'whatsapp_to' => '',          // e.g. '60123456789' (no +)
+            'channels'    => ['in_app'],  // add 'email', 'whatsapp' to enable external delivery
+        ],
     ],
     'risk' => [
         'thresholds' => [

@@ -55,6 +55,7 @@ try {
         'company' => $companyName, 'email' => $email,
     ]);
 
+    $alerts = (array)config('notifications.operator_alerts', []);
     Notifier::dispatch(
         'demo.request',
         'New demo request',
@@ -62,7 +63,13 @@ try {
             $fullName, $companyName, $email,
             $outletCount ?: 'n/a', $platforms ?: 'n/a',
             $message ?: '(none)'),
-        ['entity' => 'demo_request', 'entity_id' => $reqId]
+        [
+            'entity'      => 'demo_request',
+            'entity_id'   => $reqId,
+            'channels'    => $alerts['channels']    ?? ['in_app'],
+            'email_to'    => $alerts['email_to']    ?? null,
+            'whatsapp_to' => $alerts['whatsapp_to'] ?? null,
+        ]
     );
 
     redirect('index.php?demo=ok#demo');
