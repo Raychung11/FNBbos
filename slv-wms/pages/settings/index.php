@@ -22,6 +22,7 @@ $cards = [
     ['Email (SMTP)',        'Outbound mail server for low-stock alerts and digests.',         '/pages/settings/smtp.php'],
     ['Warehouses',          'Add or edit warehouses. Every operational record lives in one.', '/pages/warehouses/index.php'],
     ['Users & access',      'Create staff accounts, assign roles, grant per-warehouse access.','/pages/users/index.php'],
+    ['Seed demo data',      'One-click realistic demo: warehouses, SKUs, bins, suppliers, customers, demo users.', '/pages/settings/demo_seed.php'],
 ];
 ?>
 <h1 class="text-2xl font-semibold text-gray-900 mb-6">Settings</h1>
