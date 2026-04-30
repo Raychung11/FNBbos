@@ -16,5 +16,6 @@ require __DIR__ . '/auth.php';
 require __DIR__ . '/docnum.php';
 require __DIR__ . '/csv.php';
 require __DIR__ . '/mail.php';
+require __DIR__ . '/stock.php';
 
 session_boot();

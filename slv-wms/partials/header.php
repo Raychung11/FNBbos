@@ -74,6 +74,10 @@ $role      = $user['role'] ?? '';
         </div>
       </div>
 
+      <?php if (in_array($role, ['super_admin','warehouse_manager','sales','viewer'], true)): ?>
+        <a href="/pages/reports/index.php" class="hover:text-white/80">Reports</a>
+      <?php endif; ?>
+
       <?php if ($role === 'super_admin'): ?>
         <a href="/pages/settings/index.php" class="hover:text-white/80">Settings</a>
         <a href="/pages/users/index.php" class="hover:text-white/80">Users</a>

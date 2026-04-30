@@ -223,8 +223,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 0:</span> Foundation (auth, sessions, branding, audit log). ✓</li>
     <li><span class="font-medium">Phase 1:</span> Settings backend (branding, doc numbering, tax, SMTP, users). ✓</li>
     <li><span class="font-medium">Phase 2:</span> Master data (categories, products, bins, suppliers, customers + CSV imports). ✓</li>
-    <li><span class="font-medium">Phase 3:</span> FIFO engine + opening-stock importer + stock-on-hand report.</li>
-    <li><span class="font-medium">Phase 4+:</span> GRN, picking, invoicing, transfers, reports.</li>
+    <li><span class="font-medium">Phase 3:</span> FIFO engine, opening-stock importer, stock-on-hand &amp; movements reports. ✓</li>
+    <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine.</li>
+    <li><span class="font-medium">Phase 5+:</span> Mobile receive/putaway, picking, invoicing, transfers.</li>
   </ul>
 </div>
 <?php endif; ?>

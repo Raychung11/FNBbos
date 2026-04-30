@@ -113,6 +113,12 @@ require __DIR__ . '/../../partials/header.php';
         <strong>bins</strong>: <code>warehouse_code, zone_code, zone_name, zone_type, rack_code, bin_code, capacity_units, pickable, status, barcode</code>
         — required: <code>warehouse_code, zone_code, rack_code, bin_code</code>. Zones &amp; racks are auto-created.
       </div>
+      <div>
+        <strong>opening_stock</strong>: <code>warehouse_code, sku_code, bin_code, qty, unit_cost, received_at</code>
+        — required: all but <code>received_at</code> (defaults to now). <code>bin_code</code> may be the short
+        code or the full <code>WH/Z/R/B</code> code; the latter is preferred. Each row creates one FIFO layer
+        via <code>record_putaway(source=OPENING)</code>.
+      </div>
     </div>
   </details>
 

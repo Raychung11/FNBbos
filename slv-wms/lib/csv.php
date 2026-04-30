@@ -16,8 +16,9 @@ const CSV_IMPORT_CHUNK = 500;
 function csv_import_types(): array
 {
     return [
-        'products' => 'Products / SKUs (with primary barcode)',
-        'bins'     => 'Bins (warehouse_code,zone_code,rack_code,bin_code,...)',
+        'products'       => 'Products / SKUs (with primary barcode)',
+        'bins'           => 'Bins (warehouse_code,zone_code,rack_code,bin_code,...)',
+        'opening_stock'  => 'Opening stock (warehouse_code,sku_code,bin_code,qty,unit_cost)',
     ];
 }
 
@@ -176,6 +177,11 @@ function csv_run_chunk(int $job_id): array
     }
 
     $opts = $job['options_json'] ? (json_decode((string)$job['options_json'], true) ?: []) : [];
+    // Make job + uploader visible to row handlers so they can stamp
+    // source_ref_id / user_id (e.g. opening-stock layers reference back
+    // to the import_jobs row that created them).
+    $opts['job_id']  = (int)$job['id'];
+    $opts['user_id'] = (int)$job['created_by'];
 
     $processedBefore = (int)$job['processed_rows'];
     $successDelta    = 0;

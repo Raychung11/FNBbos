@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -49,8 +49,20 @@ shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 | Importer handlers      | `lib/import/products.php`, `lib/import/bins.php` (auto-creates parent zones/racks)        |
 | Header nav             | `partials/header.php` — Master dropdown for products/categories/locations/suppliers/customers/imports |
 
-**Still pending** (Phase 3+): FIFO engine + opening-stock importer / GRN /
-picking / invoicing / transfers / reports / cron.
+## Phase 3 — FIFO engine + opening stock + reports
+
+| Layer                  | What ships                                                                                |
+|------------------------|-------------------------------------------------------------------------------------------|
+| Schema                 | `migrations/005_stock_engine.sql` — `stock_movements`, `stock_layers`, `stock_layer_movements`, `inventory` |
+| FIFO engine            | `lib/stock.php` — `record_putaway()` and `record_issue()`. The ONLY place in the codebase that may write to those four tables. Idempotent via `scan_uuid` UNIQUE; FOR-UPDATE-locked FIFO consume; layer cost-basis preserved across transfers. |
+| Opening-stock import   | `lib/import/opening_stock.php` (registered in `csv_import_types()`). Each row creates one `stock_layer` via `record_putaway(source=OPENING)`. Auto-resolves bins by `full_code` or short code. |
+| Reports landing        | `pages/reports/index.php`                                                                  |
+| Stock on hand          | `pages/reports/stock_on_hand.php` — per-(SKU, warehouse) FIFO valuation with per-layer drilldown. |
+| Stock movements ledger | `pages/reports/stock_movements.php` — filterable by warehouse / SKU / type / date range.   |
+| Header nav             | `partials/header.php` — adds **Reports** to the top bar for super_admin / warehouse_manager / sales / viewer. |
+
+**Still pending** (Phase 4+): GRN desktop / mobile receive+putaway / picking /
+invoicing+DO PDFs / transfers / adjustments / counts / dashboard charts / cron.
 
 ---
 
@@ -129,6 +141,15 @@ Default seed:
 - [ ] **CSV imports — bins:** upload a 5-row CSV with `warehouse_code,zone_code,rack_code,bin_code`. Zones and racks auto-create. Re-running the same CSV is a no-op (UPDATE on existing bins).
 - [ ] **Errors CSV:** upload a products CSV with one row that uses a `sku_code` containing spaces. Job ends `COMPLETED` with `error_rows = 1`. The `Errors CSV` link downloads a CSV that includes a trailing `_error` column with the validation message.
 
+**Phase 3 acceptance:**
+- [ ] Run `migrations/005_stock_engine.sql` cleanly on the existing DB.
+- [ ] **Opening-stock import:** upload a CSV with `warehouse_code,sku_code,bin_code,qty,unit_cost` for at least 3 SKUs split across 2 warehouses. Each row creates exactly one `stock_layers` row, one `stock_movements` row (type `OPENING`), and one `inventory` row.
+- [ ] **Stock on hand:** Reports → Stock on hand shows one row per (SKU, warehouse). Total qty + total value = sum of imported rows. Click "Drilldown" — the layer table lists every layer with its `received_at`, bin, unit cost, qty remaining, and per-layer value.
+- [ ] **Stock movements:** Reports → Stock movements lists every imported row as `OPENING` with positive Δqty. Filter by warehouse or SKU narrows the list.
+- [ ] **Idempotency check (manual):** call `record_putaway(...)` from a script with the same `scan_uuid` twice — only one layer + one movement gets created. Verify in `stock_layers` and `stock_movements` tables.
+- [ ] **Insufficient-stock check:** call `record_issue()` from a script for more qty than is in a bin — it throws `Insufficient stock` and rolls back; no `stock_movements` or `stock_layer_movements` row is created.
+- [ ] **FIFO order:** add two `OPENING` layers for the same SKU+bin with different `received_at` dates and `unit_cost`. Issue half of the older layer's qty — the older layer's `qty_remaining` decrements first; the newer layer is untouched until the older is depleted.
+
 ---
 
 ## Repository layout (target — Phase 0 subset present)
@@ -174,6 +195,7 @@ Default seed:
 │   ├── suppliers/       ✅ Phase 2
 │   ├── customers/       ✅ Phase 2
 │   ├── imports/         ✅ Phase 2
+│   ├── reports/         ✅ Phase 3 (stock on hand + movements)
 │   ├── grn/             ⏳ Phase 4
 │   └── …                ⏳
 ├── m/
@@ -248,9 +270,12 @@ check fails.
 
 ---
 
-## Next: Phase 3
+## Next: Phase 4
 
-Phase 3 wires the **FIFO engine** (`lib/stock.php` with `record_putaway()`
-and `record_issue()`), opening-stock CSV importer, and the stock-on-hand
-report. After that the operational flows (GRN, picking, invoicing, transfers)
-follow in their own phases. Hold here until Phase 2 deploys cleanly.
+Phase 4 wires the **Goods Receipt (GRN) desktop flow**: create a GRN
+referencing a supplier and a target warehouse, scan-receive lines into
+staging, then run a putaway-suggestion engine that proposes Zone/Rack/Bin
+per line based on the SKU's default zone, existing bin holding the same
+SKU, or the first empty pickable bin in the SKU's category zone. Putaway
+execution calls `lib/stock.php → record_putaway(source=GRN)`. Hold here
+until Phase 3 deploys cleanly.
