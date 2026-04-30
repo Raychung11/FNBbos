@@ -15,5 +15,6 @@ require __DIR__ . '/csrf.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/docnum.php';
 require __DIR__ . '/csv.php';
+require __DIR__ . '/mail.php';
 
 session_boot();

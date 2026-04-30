@@ -1,8 +1,12 @@
 <?php
 // SLV WMS — login.php
-// Purpose: Email + password login for desktop and mobile entry points.
-// Roles allowed: anonymous (sets up session)
-// Last updated: 2026-04-29
+// Purpose: Primary sign-in page. Shares the split-screen layout with
+//          forgot.php / reset.php. The "Demo accounts" panel auto-shows
+//          for any user whose password_hash still matches the seeded
+//          ChangeMe!2026 hash, and disappears once those accounts are
+//          rotated.
+// Roles allowed: anonymous
+// Last updated: 2026-04-30
 
 declare(strict_types=1);
 
@@ -13,7 +17,7 @@ if (is_logged_in()) {
 }
 
 $error = null;
-$email = '';
+$email = (string)($_GET['email'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -28,7 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid credentials.';
     } else {
         $next = (string)($_GET['next'] ?? '/index.php');
-        // Only allow same-origin relative paths.
         if (!preg_match('#^/[^/\\\\]#', $next)) {
             $next = '/index.php';
         }
@@ -36,55 +39,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$company = company_record()['name'] ?? setting('brand.company_name', 'SLV Group Sdn. Bhd.');
-$primary = setting('brand.primary_color', '#6D28D9');
-?>
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="<?= e_($primary) ?>">
-<title>Sign in · <?= e_($company) ?> WMS</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<style>:root{--slv-primary: <?= e_($primary) ?>;}.slv-bg-primary{background:var(--slv-primary);}</style>
-</head>
-<body class="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-  <div class="w-full max-w-sm">
-    <div class="text-center mb-6">
-      <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg slv-bg-primary text-white font-bold">SLV</div>
-      <h1 class="mt-3 text-lg font-semibold text-gray-900"><?= e_($company) ?></h1>
-      <p class="text-sm text-gray-500">Warehouse Management System</p>
-    </div>
+// Detect demo accounts that still have the seeded password.
+const DEMO_SEED_HASH = '$2y$12$qH2aqyG5I3UIbWWZpvhR/O10WQ/kSsBpqhY9NvGDOSE5wxp8jBism'; // ChangeMe!2026
+$demoAccounts = [];
+try {
+    $stmt = db()->prepare(
+        "SELECT email, name, role
+           FROM users
+          WHERE company_id = ? AND status = 'ACTIVE' AND password_hash = ?
+       ORDER BY FIELD(role,'super_admin','warehouse_manager','sales','picker','packer','driver','viewer','receiver'), email"
+    );
+    $stmt->execute([company_id(), DEMO_SEED_HASH]);
+    $demoAccounts = $stmt->fetchAll();
+} catch (Throwable $e) {
+    $demoAccounts = []; // safe fallback if DB hiccups
+}
 
-    <div class="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
-      <?php if ($error): ?>
-        <div class="mb-4 border border-red-200 bg-red-50 text-red-800 text-sm rounded px-3 py-2">
-          <?= e_($error) ?>
-        </div>
-      <?php endif; ?>
-      <form method="post" novalidate class="space-y-4">
-        <?= csrf_field() ?>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Email</label>
-          <input type="email" name="email" value="<?= e_($email) ?>" required autofocus
-                 autocomplete="email"
-                 class="mt-1 w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Password</label>
-          <input type="password" name="password" required autocomplete="current-password"
-                 class="mt-1 w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-        </div>
-        <button type="submit"
-                class="w-full slv-bg-primary text-white rounded py-2 font-medium hover:opacity-90">
-          Sign in
-        </button>
-      </form>
-    </div>
-    <p class="mt-4 text-center text-xs text-gray-500">
-      Use a phone? <a href="/m/login.php" class="underline">Open mobile scanner</a>
-    </p>
+$PAGE_TITLE   = 'Sign in';
+$AUTH_HEADING = 'Sign in';
+$AUTH_SUB     = 'Use your work email and password to access the warehouse.';
+require __DIR__ . '/partials/auth_layout.php';
+?>
+<?php if ($error): ?>
+  <div class="mb-4 border border-red-200 bg-red-50 text-red-800 text-sm rounded px-3 py-2">
+    <?= e_($error) ?>
   </div>
-</body>
-</html>
+<?php endif; ?>
+
+<form method="post" novalidate class="space-y-4" x-data="{show:false}">
+  <?= csrf_field() ?>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Email</label>
+    <input type="email" name="email" value="<?= e_($email) ?>" required autofocus
+           autocomplete="email" id="login-email"
+           class="mt-1 w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+  </div>
+  <div>
+    <div class="flex items-center justify-between">
+      <label class="block text-sm font-medium text-gray-700">Password</label>
+      <a href="/forgot.php" class="text-xs text-indigo-700 hover:underline">Forgot password?</a>
+    </div>
+    <div class="mt-1 relative">
+      <input :type="show ? 'text' : 'password'" name="password" required autocomplete="current-password" id="login-password"
+             class="w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 pr-16">
+      <button type="button" @click="show = !show"
+              class="absolute right-2 inset-y-0 px-2 text-xs text-gray-500 hover:text-gray-800">
+        <span x-show="!show">Show</span><span x-show="show" x-cloak>Hide</span>
+      </button>
+    </div>
+  </div>
+  <button type="submit"
+          class="w-full slv-bg-primary text-white rounded py-2 font-medium hover:opacity-90">
+    Sign in
+  </button>
+</form>
+
+<?php if ($demoAccounts): ?>
+  <section class="mt-8" x-data="{
+      open: true,
+      fill(email, pass){
+        document.getElementById('login-email').value = email;
+        document.getElementById('login-password').value = pass;
+        document.getElementById('login-email').focus();
+      }
+    }">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Demo accounts</h3>
+      <button type="button" @click="open = !open" class="text-xs text-gray-500 hover:text-gray-800">
+        <span x-show="open">Hide</span><span x-show="!open" x-cloak>Show</span>
+      </button>
+    </div>
+    <div x-show="open" x-cloak class="bg-amber-50 border border-amber-200 rounded p-3 space-y-2">
+      <p class="text-xs text-amber-800">
+        These accounts still have the seeded password <code class="bg-white/60 px-1 rounded">ChangeMe!2026</code>.
+        This panel disappears as soon as you rotate them.
+      </p>
+      <div class="divide-y divide-amber-200">
+        <?php foreach ($demoAccounts as $a): ?>
+          <button type="button" @click="fill('<?= e_($a['email']) ?>','ChangeMe!2026')"
+                  class="w-full flex items-center justify-between gap-3 py-2 text-left hover:bg-amber-100 rounded px-2">
+            <div>
+              <div class="text-sm font-medium text-gray-900"><?= e_($a['name']) ?></div>
+              <div class="text-xs text-gray-600 font-mono"><?= e_($a['email']) ?></div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs font-mono text-gray-700"><?= e_($a['role']) ?></div>
+              <div class="text-xs text-indigo-700">Use →</div>
+            </div>
+          </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </section>
+<?php endif; ?>
+
+<div class="mt-8 pt-6 border-t border-gray-200 flex items-center justify-between text-sm">
+  <a href="/m/login.php" class="inline-flex items-center gap-2 text-indigo-700 hover:underline">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+    </svg>
+    Open mobile scanner
+  </a>
+  <span class="text-xs text-gray-400">v0.1 · Phase 2</span>
+</div>
+
+<?php require __DIR__ . '/partials/auth_layout_close.php'; ?>
