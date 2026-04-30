@@ -55,6 +55,25 @@ $role      = $user['role'] ?? '';
     </div>
     <nav class="flex items-center gap-4 text-sm">
       <a href="/index.php" class="hover:text-white/80">Dashboard</a>
+
+      <div x-data="{open:false}" class="relative" @click.outside="open=false">
+        <button @click="open=!open" class="hover:text-white/80 inline-flex items-center gap-1">
+          Master <span class="opacity-60">▾</span>
+        </button>
+        <div x-show="open" x-transition x-cloak
+             class="absolute right-0 mt-2 w-56 rounded-md bg-white text-gray-800 shadow-lg ring-1 ring-black/5 z-30">
+          <a href="/pages/products/index.php"   class="block px-4 py-2 text-sm hover:bg-gray-50">Products / SKUs</a>
+          <a href="/pages/categories/index.php" class="block px-4 py-2 text-sm hover:bg-gray-50">Categories</a>
+          <a href="/pages/locations/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Zones / Racks / Bins</a>
+          <a href="/pages/suppliers/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Suppliers</a>
+          <a href="/pages/customers/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Customers</a>
+          <?php if ($role === 'super_admin'): ?>
+            <hr class="my-1">
+            <a href="/pages/imports/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">CSV imports</a>
+          <?php endif; ?>
+        </div>
+      </div>
+
       <?php if ($role === 'super_admin'): ?>
         <a href="/pages/settings/index.php" class="hover:text-white/80">Settings</a>
         <a href="/pages/users/index.php" class="hover:text-white/80">Users</a>
@@ -63,6 +82,7 @@ $role      = $user['role'] ?? '';
       <span class="opacity-80"><?= e_($user['name'] ?? '') ?> <span class="opacity-60">(<?= e_($role) ?>)</span></span>
       <a href="/logout.php" class="hover:text-white/80 underline-offset-2 hover:underline">Sign out</a>
     </nav>
+    <style>[x-cloak]{display:none !important;}</style>
   </div>
 </header>
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

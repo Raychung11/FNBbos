@@ -14,5 +14,6 @@ require __DIR__ . '/helpers.php';
 require __DIR__ . '/csrf.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/docnum.php';
+require __DIR__ . '/csv.php';
 
 session_boot();

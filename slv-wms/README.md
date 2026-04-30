@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -35,8 +35,22 @@ shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 | Users & access         | `pages/users/index.php`, `create.php`, `edit.php` (role + per-warehouse grants)            |
 | Helpers                | `setting_set()`, `setting_cache_clear()`, `company_record()` added to `lib/helpers.php`    |
 
-**Still pending** (Phase 2+): products / barcodes / categories / bins /
-suppliers / customers / GRN / picking / invoicing / FIFO engine / transfers / reports.
+## Phase 2 — master data
+
+| Layer                  | What ships                                                                                |
+|------------------------|-------------------------------------------------------------------------------------------|
+| Schema                 | `migrations/003_master_data.sql` — categories, products, product_barcodes, product_warehouse_settings, zones, racks, bins, suppliers, customers, import_jobs |
+| Categories             | `pages/categories/index.php` (combined list + inline create/edit, parent dropdown)        |
+| Products + barcodes    | `pages/products/{index,create,edit,_form,_form_data,_save}.php` — multi-barcode rows with one primary, single shared form |
+| Zones / racks / bins   | `pages/locations/index.php` — warehouse picker, hierarchical tree with inline CRUD at every level |
+| Suppliers              | `pages/suppliers/{index,create,edit,_form,_save}.php`                                     |
+| Customers              | `pages/customers/{index,create,edit,_form,_save}.php` (default tax group + credit limit)  |
+| CSV imports            | `pages/imports/{index,upload,run,errors}.php` + `lib/csv.php` chunked runner              |
+| Importer handlers      | `lib/import/products.php`, `lib/import/bins.php` (auto-creates parent zones/racks)        |
+| Header nav             | `partials/header.php` — Master dropdown for products/categories/locations/suppliers/customers/imports |
+
+**Still pending** (Phase 3+): FIFO engine + opening-stock importer / GRN /
+picking / invoicing / transfers / reports / cron.
 
 ---
 
@@ -104,6 +118,17 @@ Default seed:
 - [ ] **Users:** create a user with role `picker` and grant access only to `WH02`. Login as that user → only `WH02` shows in the dashboard selector.
 - [ ] Self-edit guard: as `admin@slv.local`, the role dropdown is locked to `super_admin` and status is forced `ACTIVE`.
 
+**Phase 2 acceptance:**
+- [ ] Run `migrations/003_master_data.sql` cleanly on the existing DB.
+- [ ] Header `Master ▾` dropdown shows Products / Categories / Zones-Racks-Bins / Suppliers / Customers / CSV imports.
+- [ ] **Categories:** create `Frozen Food`, then a child category `Ice cream` (parent dropdown). Try to delete one with products attached — blocked.
+- [ ] **Products:** create a SKU `SKU-001` with one primary barcode `1234567890123` (EAN). Add a second internal barcode and confirm only one stays marked primary. Edit the SKU; the primary radio is preselected on the original.
+- [ ] **Locations:** pick `WH01`. Add zone `Z-A` (DRY), then rack `R01`, then bin `B03` with capacity 100 and pickable on. The `full_code` field shows `WH01/Z-A/R01/B03`. Edit a bin's barcode and verify uniqueness is enforced.
+- [ ] **Suppliers** + **Customers:** create one of each, edit, deactivate, search by code/name.
+- [ ] **CSV imports — products:** upload a 5-row CSV with columns `sku_code,name,category_name,uom,pack_size,selling_price,primary_barcode`. Run all chunks; success_rows = 5, errors = 0. The category is auto-created if missing.
+- [ ] **CSV imports — bins:** upload a 5-row CSV with `warehouse_code,zone_code,rack_code,bin_code`. Zones and racks auto-create. Re-running the same CSV is a no-op (UPDATE on existing bins).
+- [ ] **Errors CSV:** upload a products CSV with one row that uses a `sku_code` containing spaces. Job ends `COMPLETED` with `error_rows = 1`. The `Errors CSV` link downloads a CSV that includes a trailing `_error` column with the validation message.
+
 ---
 
 ## Repository layout (target — Phase 0 subset present)
@@ -143,8 +168,12 @@ Default seed:
 │   ├── settings/        ✅ Phase 1 (branding/numbering/tax/smtp)
 │   ├── warehouses/      ✅ Phase 1
 │   ├── users/           ✅ Phase 1
-│   ├── products/        ⏳ Phase 2
-│   ├── bins/            ⏳ Phase 2
+│   ├── categories/      ✅ Phase 2
+│   ├── products/        ✅ Phase 2
+│   ├── locations/       ✅ Phase 2 (zones/racks/bins)
+│   ├── suppliers/       ✅ Phase 2
+│   ├── customers/       ✅ Phase 2
+│   ├── imports/         ✅ Phase 2
 │   ├── grn/             ⏳ Phase 4
 │   └── …                ⏳
 ├── m/
@@ -195,8 +224,9 @@ Default seed:
 
 ---
 
-## Next: Phase 2
+## Next: Phase 3
 
-Phase 2 will add **Other master data** — categories, products + barcodes,
-zones / racks / bins, suppliers, customers, plus their CSV importers (chunked).
-Hold here until Phase 1 deploys cleanly on Hostinger.
+Phase 3 wires the **FIFO engine** (`lib/stock.php` with `record_putaway()`
+and `record_issue()`), opening-stock CSV importer, and the stock-on-hand
+report. After that the operational flows (GRN, picking, invoicing, transfers)
+follow in their own phases. Hold here until Phase 2 deploys cleanly.
