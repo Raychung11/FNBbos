@@ -31,9 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!attempt_login($email, $pass)) {
         $error = 'Invalid credentials.';
     } else {
-        $next = (string)($_GET['next'] ?? '/index.php');
-        if (!preg_match('#^/[^/\\\\]#', $next)) {
-            $next = '/index.php';
+        // Honour ?next= when it's a same-origin relative path; otherwise
+        // route by role — pickers/packers/drivers/receivers land on the
+        // scanner, everyone else on the desktop dashboard.
+        $next = (string)($_GET['next'] ?? '');
+        if ($next === '' || !preg_match('#^/[^/\\\\]#', $next)) {
+            $next = default_landing_url(current_user()['role'] ?? 'viewer');
         }
         redirect($next);
     }

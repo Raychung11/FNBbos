@@ -211,6 +211,30 @@ function load_user_warehouse_ids(int $user_id, string $role): array
 }
 
 // -----------------------------------------------------------------------------
+// Role-based default landing
+// -----------------------------------------------------------------------------
+
+/**
+ * Roles whose primary working surface is the phone scanner. After login they
+ * land on /m/home.php; if they ever arrive at /index.php directly, the
+ * desktop dashboard auto-forwards them.
+ */
+function is_mobile_first_role(string $role): bool
+{
+    return in_array($role, ['picker', 'packer', 'driver', 'receiver'], true);
+}
+
+/**
+ * Where to send a freshly-authenticated user when no ?next= override is
+ * supplied. Mobile-first roles go straight to the scanner; everyone else
+ * lands on the desktop dashboard.
+ */
+function default_landing_url(string $role): string
+{
+    return is_mobile_first_role($role) ? '/m/home.php' : '/index.php';
+}
+
+// -----------------------------------------------------------------------------
 // Selected-warehouse helpers (dashboard filter; persists in session)
 // -----------------------------------------------------------------------------
 
