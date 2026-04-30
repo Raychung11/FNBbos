@@ -34,7 +34,10 @@ return [
         // Session cookie name; bump if you ever re-key sessions.
         'session_name'  => 'slvwms_sess',
 
-        // Force HTTPS-only cookies. Disable only for local dev.
+        // Send session cookies only over HTTPS. Treated as a *ceiling* —
+        // the runtime auto-disables this on a plain-HTTP request to avoid
+        // breaking sessions before SSL is provisioned. Leaving it true is
+        // safe and recommended.
         'cookie_secure' => true,
 
         // Default timezone for date formatting.

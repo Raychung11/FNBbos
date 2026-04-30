@@ -9,6 +9,14 @@ declare(strict_types=1);
 
 /**
  * Start the PHP session with secure defaults. Idempotent.
+ *
+ * Secure-cookie behaviour: the config flag `app.cookie_secure` only takes
+ * effect when the current request is actually over HTTPS. Setting it on a
+ * plain-HTTP request would cause the browser to silently drop the cookie,
+ * breaking sessions and producing a "CSRF token mismatch" loop on first
+ * deploy. We honour the user's intent by upgrading to Secure as soon as
+ * HTTPS is detected (including via `X-Forwarded-Proto: https` from a
+ * reverse proxy).
  */
 function session_boot(): void
 {
@@ -16,8 +24,13 @@ function session_boot(): void
         return;
     }
     global $CONFIG;
-    $name   = $CONFIG['app']['session_name']  ?? 'slvwms_sess';
-    $secure = !empty($CONFIG['app']['cookie_secure']);
+    $name        = $CONFIG['app']['session_name']  ?? 'slvwms_sess';
+    $wantsSecure = !empty($CONFIG['app']['cookie_secure']);
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+            || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https')
+            || ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443);
+    $secure = $wantsSecure && $isHttps;
 
     session_name($name);
     session_set_cookie_params([

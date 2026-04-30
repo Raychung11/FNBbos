@@ -224,6 +224,30 @@ Default seed:
 
 ---
 
+## Troubleshooting
+
+### "CSRF token mismatch" / "Session security check failed"
+
+The browser isn't returning the session cookie, so each request gets a fresh
+`_csrf` and the form's token never matches. Check, in order:
+
+1. **Are you on plain HTTP?** Run the site over HTTPS, or temporarily set
+   `cookie_secure => false` in `config/app.php`. As of `lib/auth.php`
+   `session_boot()` the Secure flag auto-disables on plain-HTTP requests,
+   so this should self-heal — but if you're behind a reverse proxy that
+   terminates TLS, make sure it sends `X-Forwarded-Proto: https` (Hostinger
+   does this by default).
+2. **Are you in private/incognito mode with strict cookie blocking?** Allow
+   cookies for the WMS host.
+3. **Did you have the form open in two tabs?** Submit the most recently
+   loaded one.
+4. **Did your session expire?** Reload, log in again.
+
+The error page at `lib/csrf.php` lists these hints inline whenever the
+check fails.
+
+---
+
 ## Next: Phase 3
 
 Phase 3 wires the **FIFO engine** (`lib/stock.php` with `record_putaway()`
