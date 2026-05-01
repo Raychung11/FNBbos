@@ -1,8 +1,9 @@
 <?php
 // SLV WMS — pages/dashboard.php
-// Purpose: Role-aware dashboard. Mobile-first roles auto-redirect to
-//          the scanner. Other roles see tiles + quick-actions tailored
-//          to what they actually do.
+// Purpose: Role-aware dashboard. Mobile-first roles auto-redirect to the
+//          scanner. Other roles see a coloured role banner, a tile set,
+//          and a quick-action strip that are all distinct enough that
+//          you can tell which role you're signed in as without reading.
 // Roles allowed: any logged-in role
 // Last updated: 2026-04-30
 
@@ -17,7 +18,6 @@ $user = current_user();
 $role = $user['role'] ?? 'viewer';
 
 // Mobile-first roles never need this page — bounce them to the scanner.
-// They can still navigate here manually if they ever need to.
 if (is_mobile_first_role($role) && empty($_GET['stay'])) {
     redirect('/m/home.php');
 }
@@ -50,7 +50,7 @@ if ($accessible_ids) {
 }
 $selected = selected_warehouse_id();
 
-// ---- Live counts from the master data we already have -----------------------
+// ---- Live counts -------------------------------------------------------------
 $cid = company_id();
 $accessibleClause = $accessible_ids
     ? 'IN (' . implode(',', array_fill(0, count($accessible_ids), '?')) . ')'
@@ -73,91 +73,147 @@ $binCountStmt = db()->prepare(
 $binCountStmt->execute(array_merge([$cid], $accessibleParams));
 $counts['bins'] = (int)$binCountStmt->fetchColumn();
 
-// ---- Role-tailored tiles + quick actions ------------------------------------
-/**
- * Each tile: [label, value, hint, optional href].
- * Hints reference the phase that lights the value up beyond the placeholder.
- */
-$tiles = role_dashboard_tiles($role, $counts);
-$quick = role_dashboard_actions($role);
+// Stock value (FIFO) — wired up in Phase 3, only shows for admin/manager.
+$valueStmt = db()->prepare(
+    "SELECT COALESCE(SUM(qty_remaining * unit_cost), 0)
+       FROM stock_layers
+      WHERE company_id = ? AND status = 'ACTIVE'
+        AND warehouse_id $accessibleClause"
+);
+$valueStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['stock_value'] = (float)$valueStmt->fetchColumn();
 
-function role_dashboard_tiles(string $role, array $counts): array
+// ---- Role-specific copy + tiles ---------------------------------------------
+
+/** @return array{
+ *   role_label:string,
+ *   sub:string,
+ *   banner_class:string,
+ *   tiles:array<int,array{0:string,1:mixed,2:string,3:?string}>,
+ *   actions:array<int,array{0:string,1:string}>
+ * } */
+function dashboard_view_for(string $role, array $counts): array
 {
-    $admin = ['super_admin', 'warehouse_manager'];
+    switch ($role) {
+        case 'super_admin':
+            return [
+                'role_label'   => 'Super admin',
+                'sub'          => 'Full system access — every warehouse, every operation, every setting.',
+                'banner_class' => 'bg-amber-50 border-amber-200 text-amber-900',
+                'tiles' => [
+                    ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
+                    ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
+                    ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
+                    ['Suppliers',            $counts['suppliers'],                             'Master → Suppliers',         '/pages/suppliers/index.php'],
+                    ['Customers',            $counts['customers'],                             'Master → Customers',         '/pages/customers/index.php'],
+                    ['Pending GRN',          '—',                                              'Phase 4',                    null],
+                    ['Pending pick lists',   '—',                                              'Phase 6',                    null],
+                    ['In-transit transfers', '—',                                              'Phase 11',                   null],
+                ],
+                'actions' => [
+                    ['Settings',         '/pages/settings/index.php'],
+                    ['Users & access',   '/pages/users/index.php'],
+                    ['Seed demo data',   '/pages/settings/demo_seed.php'],
+                    ['CSV imports',      '/pages/imports/index.php'],
+                ],
+            ];
 
-    if (in_array($role, $admin, true)) {
-        return [
-            ['Active SKUs',          $counts['products'],  'Master → Products',                 '/pages/products/index.php'],
-            ['Stock value (FIFO)',   '—',                   'Phase 3 wires FIFO valuation',     null],
-            ['Active bins',          $counts['bins'],       'Master → Locations',               '/pages/locations/index.php'],
-            ['Suppliers',            $counts['suppliers'],  'Master → Suppliers',               '/pages/suppliers/index.php'],
-            ['Pending GRN',          '—',                   'Phase 4',                          null],
-            ['Pending pick lists',   '—',                   'Phase 6',                          null],
-            ['Pending deliveries',   '—',                   'Phase 8',                          null],
-            ['In-transit transfers', '—',                   'Phase 11',                         null],
-        ];
+        case 'warehouse_manager':
+            return [
+                'role_label'   => 'Warehouse manager',
+                'sub'          => 'Run the warehouses you have access to: receive, putaway, count, transfer.',
+                'banner_class' => 'bg-emerald-50 border-emerald-200 text-emerald-900',
+                'tiles' => [
+                    ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
+                    ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
+                    ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
+                    ['Pending GRN',          '—',                                              'Phase 4',                    null],
+                    ['Pending pick lists',   '—',                                              'Phase 6',                    null],
+                    ['Pending deliveries',   '—',                                              'Phase 8',                    null],
+                ],
+                'actions' => [
+                    ['Locations',          '/pages/locations/index.php'],
+                    ['Stock on hand',      '/pages/reports/stock_on_hand.php'],
+                    ['Stock movements',    '/pages/reports/stock_movements.php'],
+                    ['Suppliers',          '/pages/suppliers/index.php'],
+                ],
+            ];
+
+        case 'sales':
+            return [
+                'role_label'   => 'Sales',
+                'sub'          => 'Find customers, check stock availability, raise sales orders.',
+                'banner_class' => 'bg-sky-50 border-sky-200 text-sky-900',
+                'tiles' => [
+                    ['Active customers', $counts['customers'], 'Master → Customers', '/pages/customers/index.php'],
+                    ['Active SKUs',      $counts['products'],  'Master → Products',  '/pages/products/index.php'],
+                    ['Open SOs',         '—',                  'Phase 6',            null],
+                    ['Stock available',  money($counts['stock_value']), 'Stock on hand', '/pages/reports/stock_on_hand.php'],
+                ],
+                'actions' => [
+                    ['Find a customer',   '/pages/customers/index.php'],
+                    ['Browse SKUs',       '/pages/products/index.php'],
+                    ['Check stock',       '/pages/reports/stock_on_hand.php'],
+                ],
+            ];
+
+        case 'viewer':
+            return [
+                'role_label'   => 'Read-only viewer',
+                'sub'          => 'Reports and master-data lookup. No edit permissions.',
+                'banner_class' => 'bg-gray-100 border-gray-200 text-gray-700',
+                'tiles' => [
+                    ['Active SKUs',      $counts['products'],           'Master → Products',          '/pages/products/index.php'],
+                    ['Stock value',      money($counts['stock_value']), 'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
+                    ['Active bins',      $counts['bins'],               'Master → Locations',         '/pages/locations/index.php'],
+                ],
+                'actions' => [
+                    ['Stock on hand',     '/pages/reports/stock_on_hand.php'],
+                    ['Stock movements',   '/pages/reports/stock_movements.php'],
+                ],
+            ];
+
+        // receiver/picker/packer/driver — desktop fallback only; the
+        // mobile-first redirect above handles the normal flow.
+        default:
+            return [
+                'role_label'   => ucfirst($role ?: 'unknown'),
+                'sub'          => 'Your tasks live in the mobile scanner.',
+                'banner_class' => 'bg-indigo-50 border-indigo-200 text-indigo-900',
+                'tiles'        => [],
+                'actions'      => [
+                    ['Open mobile scanner', '/m/home.php'],
+                ],
+            ];
     }
-    if ($role === 'sales') {
-        return [
-            ['Active SKUs',     $counts['products'],  'Master → Products',  '/pages/products/index.php'],
-            ['Active customers',$counts['customers'], 'Master → Customers', '/pages/customers/index.php'],
-            ['Open SOs',        '—',                  'Phase 6',            null],
-            ['Stock available', '—',                  'Phase 3',            null],
-        ];
-    }
-    // viewer (and any other read-only role)
-    return [
-        ['Active SKUs',          $counts['products'], 'Read-only',        '/pages/products/index.php'],
-        ['Stock value (FIFO)',   '—',                  'Phase 3',         null],
-        ['Pending pick lists',   '—',                  'Phase 6',         null],
-        ['Today shipments',      '—',                  'Phase 6',         null],
-    ];
 }
 
-function role_dashboard_actions(string $role): array
-{
-    if ($role === 'super_admin') {
-        return [
-            ['Settings',         '/pages/settings/index.php'],
-            ['Users & access',   '/pages/users/index.php'],
-            ['Seed demo data',   '/pages/settings/demo_seed.php'],
-            ['CSV imports',      '/pages/imports/index.php'],
-        ];
-    }
-    if ($role === 'warehouse_manager') {
-        return [
-            ['Locations',        '/pages/locations/index.php'],
-            ['Products',         '/pages/products/index.php'],
-            ['CSV imports',      '/pages/imports/index.php'],
-        ];
-    }
-    if ($role === 'sales') {
-        return [
-            ['Customers',        '/pages/customers/index.php'],
-            ['Products',         '/pages/products/index.php'],
-        ];
-    }
-    return [
-        ['Products',         '/pages/products/index.php'],
-    ];
-}
+$view = dashboard_view_for($role, $counts);
 
 $PAGE_TITLE = 'Dashboard';
 require __DIR__ . '/../partials/header.php';
 ?>
-<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+<!-- Role-tinted identity banner. Different colour, copy and width per role. -->
+<div class="mb-6 rounded-lg border <?= e_($view['banner_class']) ?> px-4 py-3 flex flex-wrap items-center justify-between gap-3">
   <div>
-    <h1 class="text-2xl font-semibold text-gray-900">
-      Welcome, <?= e_(strtok((string)$user['name'], ' ')) ?>.
-    </h1>
-    <p class="text-sm text-gray-500 mt-1">
-      Signed in as <span class="font-mono"><?= e_($role) ?></span>
-      <?php if ($accessible_ids || $role === 'super_admin'): ?>
-        · <?= $role === 'super_admin' ? 'all warehouses' : count($accessible_ids) . ' warehouse' . (count($accessible_ids) === 1 ? '' : 's') ?>
-      <?php endif; ?>
-    </p>
+    <div class="text-xs uppercase tracking-wide opacity-70">
+      <?= e_($view['role_label']) ?> view
+    </div>
+    <div class="text-base font-semibold mt-0.5">
+      Welcome, <?= e_(strtok((string)$user['name'], ' ')) ?>
+      <span class="opacity-60 font-normal text-sm">· <?= e_($user['email'] ?? '') ?></span>
+    </div>
+    <div class="text-sm opacity-80 mt-0.5"><?= e_($view['sub']) ?></div>
   </div>
+  <div class="text-xs opacity-70">
+    <?= $role === 'super_admin'
+        ? 'all warehouses'
+        : (count($accessible_ids) . ' warehouse' . (count($accessible_ids) === 1 ? '' : 's') . ' assigned') ?>
+  </div>
+</div>
 
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
   <div class="flex items-center gap-3">
     <a href="/m/home.php" class="text-sm text-indigo-700 hover:underline inline-flex items-center gap-1">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,8 +239,9 @@ require __DIR__ . '/../partials/header.php';
   </div>
 </div>
 
+<?php if ($view['tiles']): ?>
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-  <?php foreach ($tiles as $tile):
+  <?php foreach ($view['tiles'] as $tile):
     [$label, $value, $hint, $href] = array_pad($tile, 4, null);
     $valueStr = is_int($value) || (is_string($value) && $value !== '—') ? (string)$value : '—';
   ?>
@@ -197,12 +254,13 @@ require __DIR__ . '/../partials/header.php';
     </<?= $tag ?>>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 
-<?php if ($quick): ?>
+<?php if ($view['actions']): ?>
 <div class="mt-8">
   <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick actions</h2>
   <div class="flex flex-wrap gap-2">
-    <?php foreach ($quick as [$label, $href]): ?>
+    <?php foreach ($view['actions'] as [$label, $href]): ?>
       <a href="<?= e_($href) ?>"
          class="inline-flex items-center px-3 py-2 rounded text-sm bg-white border border-gray-300 hover:border-indigo-300 hover:bg-indigo-50">
         <?= e_($label) ?>
@@ -216,8 +274,7 @@ require __DIR__ . '/../partials/header.php';
 <div class="mt-8 bg-white border border-gray-200 rounded-lg p-6">
   <h2 class="text-base font-semibold text-gray-900 mb-2">Build status</h2>
   <p class="text-sm text-gray-600">
-    Phases shipped so far. The dashboard will fill with live numbers as
-    the operational phases land.
+    Phases shipped so far. Live numbers fill in as operational phases land.
   </p>
   <ul class="mt-3 text-sm text-gray-600 list-disc list-inside space-y-1">
     <li><span class="font-medium">Phase 0:</span> Foundation (auth, sessions, branding, audit log). ✓</li>

@@ -1,9 +1,10 @@
 <?php
 // SLV WMS — partials/header.php
-// Purpose: Desktop top-of-page layout. Tailwind + Alpine via CDN. Branding
-//          colours read from app_settings.
+// Purpose: Desktop top-of-page layout. The visible nav is built from a
+//          small, role-keyed table so each role sees a clearly distinct
+//          set of links — not "the same dropdown with one row missing".
 // Roles allowed: any logged-in role
-// Last updated: 2026-04-29
+// Last updated: 2026-04-30
 
 if (!isset($PAGE_TITLE)) {
     $PAGE_TITLE = 'SLV WMS';
@@ -15,6 +16,82 @@ $accent    = setting('brand.accent_color',  '#F59E0B');
 $logoPath  = setting('brand.logo_path', '');
 $user      = current_user();
 $role      = $user['role'] ?? '';
+
+/**
+ * Build the nav for this role. Each entry is either:
+ *   ['type' => 'link',     'label' => ..., 'href' => ...]
+ *   ['type' => 'dropdown', 'label' => ..., 'items' => [['label'=>...,'href'=>...], ...]]
+ */
+$NAV = (function(string $role): array {
+    switch ($role) {
+        case 'super_admin':
+            return [
+                ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'dropdown', 'label'=>'Master', 'items'=>[
+                    ['label'=>'Products / SKUs',     'href'=>'/pages/products/index.php'],
+                    ['label'=>'Categories',          'href'=>'/pages/categories/index.php'],
+                    ['label'=>'Zones / Racks / Bins','href'=>'/pages/locations/index.php'],
+                    ['label'=>'Suppliers',           'href'=>'/pages/suppliers/index.php'],
+                    ['label'=>'Customers',           'href'=>'/pages/customers/index.php'],
+                    ['_divider'=>true],
+                    ['label'=>'CSV imports',         'href'=>'/pages/imports/index.php'],
+                ]],
+                ['type'=>'link', 'label'=>'Reports',  'href'=>'/pages/reports/index.php'],
+                ['type'=>'link', 'label'=>'Settings', 'href'=>'/pages/settings/index.php'],
+                ['type'=>'link', 'label'=>'Users',    'href'=>'/pages/users/index.php'],
+            ];
+
+        case 'warehouse_manager':
+            return [
+                ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'dropdown', 'label'=>'Operations', 'items'=>[
+                    ['label'=>'Locations',          'href'=>'/pages/locations/index.php'],
+                    ['label'=>'Products / SKUs',    'href'=>'/pages/products/index.php'],
+                    ['label'=>'Categories',         'href'=>'/pages/categories/index.php'],
+                    ['_divider'=>true],
+                    ['label'=>'Suppliers',          'href'=>'/pages/suppliers/index.php'],
+                    ['label'=>'Customers',          'href'=>'/pages/customers/index.php'],
+                ]],
+                ['type'=>'link', 'label'=>'Reports', 'href'=>'/pages/reports/index.php'],
+            ];
+
+        case 'sales':
+            return [
+                ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'Customers', 'href'=>'/pages/customers/index.php'],
+                ['type'=>'link', 'label'=>'Products',  'href'=>'/pages/products/index.php'],
+                ['type'=>'link', 'label'=>'Reports',   'href'=>'/pages/reports/index.php'],
+            ];
+
+        case 'viewer':
+            return [
+                ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'Products',  'href'=>'/pages/products/index.php'],
+                ['type'=>'link', 'label'=>'Reports',   'href'=>'/pages/reports/index.php'],
+            ];
+
+        // receiver / picker / packer / driver — desktop is a fallback for
+        // them, the real surface is /m/home.php. Show the bare minimum.
+        default:
+            return [
+                ['type'=>'link', 'label'=>'Dashboard',       'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'Mobile scanner',  'href'=>'/m/home.php'],
+            ];
+    }
+})($role);
+
+// A small chip colour per role so the operator can tell at a glance.
+$ROLE_COLOURS = [
+    'super_admin'       => 'bg-amber-400  text-amber-950',
+    'warehouse_manager' => 'bg-emerald-400 text-emerald-950',
+    'sales'             => 'bg-sky-400    text-sky-950',
+    'viewer'            => 'bg-gray-300   text-gray-800',
+    'picker'            => 'bg-indigo-400 text-indigo-950',
+    'packer'            => 'bg-fuchsia-400 text-fuchsia-950',
+    'driver'            => 'bg-rose-400   text-rose-950',
+    'receiver'          => 'bg-orange-400 text-orange-950',
+];
+$roleChipClass = $ROLE_COLOURS[$role] ?? 'bg-gray-200 text-gray-700';
 ?>
 <!doctype html>
 <html lang="en">
@@ -38,6 +115,7 @@ $role      = $user['role'] ?? '';
   .slv-text-primary { color: var(--slv-primary); }
   .slv-border-primary { border-color: var(--slv-primary); }
   .slv-ring-primary:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--slv-primary) 35%, transparent); }
+  [x-cloak]{display:none !important;}
 </style>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
@@ -53,45 +131,47 @@ $role      = $user['role'] ?? '';
         <span class="font-semibold tracking-tight"><?= e_($company) ?> <span class="opacity-60">WMS</span></span>
       </a>
     </div>
-    <nav class="flex items-center gap-4 text-sm">
-      <a href="/index.php" class="hover:text-white/80">Dashboard</a>
 
-      <div x-data="{open:false}" class="relative" @click.outside="open=false">
-        <button @click="open=!open" class="hover:text-white/80 inline-flex items-center gap-1">
-          Master <span class="opacity-60">▾</span>
-        </button>
-        <div x-show="open" x-transition x-cloak
-             class="absolute right-0 mt-2 w-56 rounded-md bg-white text-gray-800 shadow-lg ring-1 ring-black/5 z-30">
-          <a href="/pages/products/index.php"   class="block px-4 py-2 text-sm hover:bg-gray-50">Products / SKUs</a>
-          <a href="/pages/categories/index.php" class="block px-4 py-2 text-sm hover:bg-gray-50">Categories</a>
-          <a href="/pages/locations/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Zones / Racks / Bins</a>
-          <a href="/pages/suppliers/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Suppliers</a>
-          <a href="/pages/customers/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">Customers</a>
-          <?php if ($role === 'super_admin'): ?>
-            <hr class="my-1">
-            <a href="/pages/imports/index.php"  class="block px-4 py-2 text-sm hover:bg-gray-50">CSV imports</a>
-          <?php endif; ?>
-        </div>
+    <nav class="flex items-center gap-4 text-sm">
+      <?php foreach ($NAV as $item): ?>
+        <?php if ($item['type'] === 'link'): ?>
+          <a href="<?= e_($item['href']) ?>" class="hover:text-white/80"><?= e_($item['label']) ?></a>
+        <?php else: ?>
+          <div x-data="{open:false}" class="relative" @click.outside="open=false">
+            <button @click="open=!open" class="hover:text-white/80 inline-flex items-center gap-1">
+              <?= e_($item['label']) ?> <span class="opacity-60">▾</span>
+            </button>
+            <div x-show="open" x-transition x-cloak
+                 class="absolute right-0 mt-2 w-56 rounded-md bg-white text-gray-800 shadow-lg ring-1 ring-black/5 z-30">
+              <?php foreach ($item['items'] as $sub): ?>
+                <?php if (!empty($sub['_divider'])): ?>
+                  <hr class="my-1">
+                <?php else: ?>
+                  <a href="<?= e_($sub['href']) ?>" class="block px-4 py-2 text-sm hover:bg-gray-50"><?= e_($sub['label']) ?></a>
+                <?php endif; ?>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+      <?php endforeach; ?>
+
+      <span class="opacity-30">|</span>
+
+      <!-- Identity chip — bright + role-tinted so you always know who you are. -->
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide <?= $roleChipClass ?>">
+          <?= e_($role) ?>
+        </span>
+        <span class="opacity-80 text-xs"><?= e_($user['name'] ?? '') ?></span>
       </div>
 
-      <?php if (in_array($role, ['super_admin','warehouse_manager','sales','viewer'], true)): ?>
-        <a href="/pages/reports/index.php" class="hover:text-white/80">Reports</a>
-      <?php endif; ?>
-
-      <?php if ($role === 'super_admin'): ?>
-        <a href="/pages/settings/index.php" class="hover:text-white/80">Settings</a>
-        <a href="/pages/users/index.php" class="hover:text-white/80">Users</a>
-      <?php endif; ?>
-      <span class="opacity-40">|</span>
-      <span class="opacity-80"><?= e_($user['name'] ?? '') ?> <span class="opacity-60">(<?= e_($role) ?>)</span></span>
       <a href="/logout.php" class="hover:text-white/80 underline-offset-2 hover:underline">Sign out</a>
     </nav>
-    <style>[x-cloak]{display:none !important;}</style>
   </div>
 </header>
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 <?php
-// Render flash messages once per page
+// Render flash messages once per page.
 $_flashes = flash_drain();
 foreach ($_flashes as $f):
     $cls = match ($f['type']) {
