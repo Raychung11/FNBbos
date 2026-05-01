@@ -73,7 +73,7 @@ $binCountStmt = db()->prepare(
 $binCountStmt->execute(array_merge([$cid], $accessibleParams));
 $counts['bins'] = (int)$binCountStmt->fetchColumn();
 
-// Stock value (FIFO) — wired up in Phase 3, only shows for admin/manager.
+// Stock value (FIFO) — wired up in Phase 3.
 $valueStmt = db()->prepare(
     "SELECT COALESCE(SUM(qty_remaining * unit_cost), 0)
        FROM stock_layers
@@ -82,6 +82,16 @@ $valueStmt = db()->prepare(
 );
 $valueStmt->execute(array_merge([$cid], $accessibleParams));
 $counts['stock_value'] = (float)$valueStmt->fetchColumn();
+
+// Pending GRN (Phase 4): anything in DRAFT / RECEIVING / RECEIVED / PUTAWAY.
+$pendStmt = db()->prepare(
+    "SELECT COUNT(*) FROM grn
+      WHERE company_id = ?
+        AND status IN ('DRAFT','RECEIVING','RECEIVED','PUTAWAY')
+        AND warehouse_id $accessibleClause"
+);
+$pendStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['pending_grn'] = (int)$pendStmt->fetchColumn();
 
 // ---- Role-specific copy + tiles ---------------------------------------------
 
@@ -106,11 +116,12 @@ function dashboard_view_for(string $role, array $counts): array
                     ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
                     ['Suppliers',            $counts['suppliers'],                             'Master → Suppliers',         '/pages/suppliers/index.php'],
                     ['Customers',            $counts['customers'],                             'Master → Customers',         '/pages/customers/index.php'],
-                    ['Pending GRN',          '—',                                              'Phase 4',                    null],
+                    ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
                     ['Pending pick lists',   '—',                                              'Phase 6',                    null],
                     ['In-transit transfers', '—',                                              'Phase 11',                   null],
                 ],
                 'actions' => [
+                    ['+ New GRN',        '/pages/grn/create.php'],
                     ['Settings',         '/pages/settings/index.php'],
                     ['Users & access',   '/pages/users/index.php'],
                     ['Seed demo data',   '/pages/settings/demo_seed.php'],
@@ -127,15 +138,15 @@ function dashboard_view_for(string $role, array $counts): array
                     ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
                     ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
                     ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
-                    ['Pending GRN',          '—',                                              'Phase 4',                    null],
+                    ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
                     ['Pending pick lists',   '—',                                              'Phase 6',                    null],
                     ['Pending deliveries',   '—',                                              'Phase 8',                    null],
                 ],
                 'actions' => [
+                    ['+ New GRN',          '/pages/grn/create.php'],
                     ['Locations',          '/pages/locations/index.php'],
                     ['Stock on hand',      '/pages/reports/stock_on_hand.php'],
                     ['Stock movements',    '/pages/reports/stock_movements.php'],
-                    ['Suppliers',          '/pages/suppliers/index.php'],
                 ],
             ];
 
@@ -281,8 +292,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 1:</span> Settings backend (branding, doc numbering, tax, SMTP, users). ✓</li>
     <li><span class="font-medium">Phase 2:</span> Master data (categories, products, bins, suppliers, customers + CSV imports). ✓</li>
     <li><span class="font-medium">Phase 3:</span> FIFO engine, opening-stock importer, stock-on-hand &amp; movements reports. ✓</li>
-    <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine.</li>
-    <li><span class="font-medium">Phase 5+:</span> Mobile receive/putaway, picking, invoicing, transfers.</li>
+    <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine. ✓</li>
+    <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows.</li>
+    <li><span class="font-medium">Phase 6+:</span> Sales orders, picking, invoicing, transfers.</li>
   </ul>
 </div>
 <?php endif; ?>

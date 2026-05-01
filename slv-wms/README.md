@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -61,7 +61,24 @@ shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 | Stock movements ledger | `pages/reports/stock_movements.php` — filterable by warehouse / SKU / type / date range.   |
 | Header nav             | `partials/header.php` — adds **Reports** to the top bar for super_admin / warehouse_manager / sales / viewer. |
 
-**Still pending** (Phase 4+): GRN desktop / mobile receive+putaway / picking /
+## Phase 4 — GRN desktop flow
+
+| Layer            | What ships                                                                                |
+|------------------|-------------------------------------------------------------------------------------------|
+| Schema           | `migrations/006_grn.sql` — `grn`, `grn_items`, `grn_putaway`                              |
+| Engine           | `lib/grn.php` — `grn_putaway_suggestions()` (consolidate-first, then default zone, then any empty bin), `grn_suggest_bin()`, `grn_recompute_status()`, `grn_putaway_execute()` (wraps `record_putaway` with `source=GRN`) |
+| List             | `pages/grn/index.php` — status / warehouse / supplier / search filters                    |
+| Create           | `pages/grn/create.php` — Alpine line-item repeater with running total                     |
+| View / receive / putaway | `pages/grn/view.php` — single page that adapts by status: edit lines (DRAFT) → receive qty + actual unit cost (RECEIVING/RECEIVED) → putaway with bin suggestion + override (RECEIVED/PUTAWAY) → CLOSED. Per-line putaway history is collapsible. |
+| Header           | `partials/header.php` — adds `GRN` to super_admin / warehouse_manager / receiver navs.    |
+| Dashboard        | `pages/dashboard.php` — "Pending GRN" tile now wired to a real count; super_admin and warehouse_manager get a `+ New GRN` quick action. |
+
+Status machine: `DRAFT → RECEIVING → RECEIVED → PUTAWAY → CLOSED`, with
+`CANCELLED` as an out at any pre-putaway stage. Status is recomputed from
+`grn_items.qty_received` / `qty_putaway` after every action so it can
+never drift.
+
+**Still pending** (Phase 5+): Mobile receive+putaway scan / picking /
 invoicing+DO PDFs / transfers / adjustments / counts / dashboard charts / cron.
 
 ---
@@ -150,6 +167,18 @@ Default seed:
 - [ ] **Insufficient-stock check:** call `record_issue()` from a script for more qty than is in a bin — it throws `Insufficient stock` and rolls back; no `stock_movements` or `stock_layer_movements` row is created.
 - [ ] **FIFO order:** add two `OPENING` layers for the same SKU+bin with different `received_at` dates and `unit_cost`. Issue half of the older layer's qty — the older layer's `qty_remaining` decrements first; the newer layer is untouched until the older is depleted.
 
+**Phase 4 acceptance:**
+- [ ] Run `migrations/006_grn.sql` cleanly on the existing DB.
+- [ ] **Create:** as `manager@slv.local`, GRN → New GRN. Pick warehouse `WH01`, supplier Coca-Cola Bottlers, add 2 lines (e.g. SKU-COKE-330 × 240 @ 1.80, SKU-COKE-1500 × 60 @ 4.20). Save → lands on the view page in `DRAFT`.
+- [ ] **Edit lines:** while in `DRAFT`, "Add a line" form works; "remove" link removes a line. The doc number (`GRN/26/00001`) is allocated at save and stays stable across reloads.
+- [ ] **Confirm:** click "Confirm & start receiving →". Status flips to `RECEIVING`. Edit/Remove links disappear; receive form appears per line.
+- [ ] **Receive:** type a different received qty than expected (e.g. 230 of 240) and a tweaked unit cost. Click save → status stays `RECEIVING` until *all* lines have qty_received >= qty_expected. Set the second line to its full expected qty → status auto-flips to `RECEIVED`.
+- [ ] **Putaway suggestion:** with `RECEIVED`, each line shows a suggested bin and a reason. The first putaway of a SKU goes to an empty pickable bin in the SKU's default zone (or any empty pickable bin if no default). The *next* putaway of the same SKU into the same warehouse suggests the bin that already holds it ("consolidate (existing bin)").
+- [ ] **Putaway execute:** keep the suggested bin, click "putaway" with the full remaining qty. Status flips to `PUTAWAY`. The action creates: one `grn_putaway` row, one `stock_movements` row (type `PUTAWAY`), one `stock_layers` row (`source_type=GRN, source_ref_id=<grn id>`), and increments `inventory`.
+- [ ] **Close:** putaway every line in full → status auto-flips to `CLOSED`.
+- [ ] **Cancel guard:** create another GRN, take it through partial receive + putaway. The "Cancel GRN" button refuses while putaway exists; it allows cancel during DRAFT/RECEIVING/RECEIVED.
+- [ ] **Reports tie-up:** Reports → Stock on hand shows the new layers; Reports → Stock movements lists the corresponding `PUTAWAY` rows with the GRN's id in the Ref column.
+
 ---
 
 ## Repository layout (target — Phase 0 subset present)
@@ -196,7 +225,7 @@ Default seed:
 │   ├── customers/       ✅ Phase 2
 │   ├── imports/         ✅ Phase 2
 │   ├── reports/         ✅ Phase 3 (stock on hand + movements)
-│   ├── grn/             ⏳ Phase 4
+│   ├── grn/             ✅ Phase 4 (list, create, view + receive + putaway)
 │   └── …                ⏳
 ├── m/
 │   ├── login.php        ✅ Phase 0
@@ -270,12 +299,12 @@ check fails.
 
 ---
 
-## Next: Phase 4
+## Next: Phase 5
 
-Phase 4 wires the **Goods Receipt (GRN) desktop flow**: create a GRN
-referencing a supplier and a target warehouse, scan-receive lines into
-staging, then run a putaway-suggestion engine that proposes Zone/Rack/Bin
-per line based on the SKU's default zone, existing bin holding the same
-SKU, or the first empty pickable bin in the SKU's category zone. Putaway
-execution calls `lib/stock.php → record_putaway(source=GRN)`. Hold here
-until Phase 3 deploys cleanly.
+Phase 5 builds the **mobile PWA shell + Receive + Putaway scan flows**:
+the receiver opens a GRN on a phone, scans SKU + qty into staging, then
+scans bin + SKU + qty for putaway. Each scan POSTs to a new
+`/api/v1/scan/*.php` endpoint that calls `lib/grn.php` →
+`grn_putaway_execute()` (or its receive equivalent). Idempotency is
+provided by client-generated `scan_uuid`s. Hold here until Phase 4
+deploys cleanly.

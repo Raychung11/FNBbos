@@ -27,6 +27,7 @@ $NAV = (function(string $role): array {
         case 'super_admin':
             return [
                 ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'GRN',       'href'=>'/pages/grn/index.php'],
                 ['type'=>'dropdown', 'label'=>'Master', 'items'=>[
                     ['label'=>'Products / SKUs',     'href'=>'/pages/products/index.php'],
                     ['label'=>'Categories',          'href'=>'/pages/categories/index.php'],
@@ -44,6 +45,7 @@ $NAV = (function(string $role): array {
         case 'warehouse_manager':
             return [
                 ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'GRN',       'href'=>'/pages/grn/index.php'],
                 ['type'=>'dropdown', 'label'=>'Operations', 'items'=>[
                     ['label'=>'Locations',          'href'=>'/pages/locations/index.php'],
                     ['label'=>'Products / SKUs',    'href'=>'/pages/products/index.php'],
@@ -73,10 +75,16 @@ $NAV = (function(string $role): array {
         // receiver / picker / packer / driver — desktop is a fallback for
         // them, the real surface is /m/home.php. Show the bare minimum.
         default:
-            return [
+            $items = [
                 ['type'=>'link', 'label'=>'Dashboard',       'href'=>'/index.php'],
                 ['type'=>'link', 'label'=>'Mobile scanner',  'href'=>'/m/home.php'],
             ];
+            if ($role === 'receiver') {
+                array_splice($items, 1, 0, [
+                    ['type'=>'link', 'label'=>'GRN', 'href'=>'/pages/grn/index.php'],
+                ]);
+            }
+            return $items;
     }
 })($role);
 
