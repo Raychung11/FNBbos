@@ -6,6 +6,7 @@ use FNBBOS\Rbac;
 use FNBBOS\Csrf;
 use FNBBOS\AuditLog;
 use FNBBOS\Engine\Reconciler;
+use FNBBOS\Engine\Notifier;
 
 Auth::requireLogin();
 Rbac::require('bank.import');
@@ -84,6 +85,28 @@ $from = (string)(input('from') ?: date('Y-m-01'));
 $to   = (string)(input('to')   ?: date('Y-m-d'));
 
 $matches = Reconciler::match($companyId, $from, $to);
+
+// Phase 3: dispatch missing-settlement alerts for items pending past the threshold.
+$delayDays = (int)config('alerts.settlement_delay_days', 3);
+$missing = [];
+foreach ($matches as $m) {
+    if ($m['status'] === 'pending' || $m['status'] === 'underpaid') {
+        $age = (strtotime(date('Y-m-d')) - strtotime($m['settle_date'])) / 86400;
+        if ($age >= $delayDays) $missing[] = $m;
+    }
+}
+if ($missing && requestMethod() === 'POST') {
+    $lines = array_map(fn($m) => sprintf('• %s platform#%d outlet#%d expected=%s received=%s',
+        $m['settle_date'], $m['platform_id'], $m['outlet_id'],
+        money((float)$m['expected']), money((float)$m['received'])), $missing);
+    Notifier::notifyCompanyFinance(
+        $companyId,
+        Notifier::EVENT_MISSING_SETTLEMENT,
+        sprintf('%d settlement(s) overdue >%dd', count($missing), $delayDays),
+        implode("\n", $lines),
+        ['channels' => ['in_app','email','whatsapp']]
+    );
+}
 $imports = db()->prepare('SELECT * FROM bank_statement_imports WHERE company_id = ? ORDER BY id DESC LIMIT 20'); $imports->execute([$companyId]); $imports = $imports->fetchAll();
 
 $pageTitle = 'Bank Reconciliation';

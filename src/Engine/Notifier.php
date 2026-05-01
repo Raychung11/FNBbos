@@ -24,6 +24,36 @@ final class Notifier
     public const EVENT_BUDGET_EXCEEDED     = 'budget.exceeded';
     public const EVENT_ABNORMAL_PURCHASE   = 'purchase.abnormal';
 
+    /**
+     * Phase 3: notify everyone in a company who would care about a finance
+     * event (finance_admin / company_admin / super_admin in that company).
+     * Runs through dispatch() so the in-app log captures one row per recipient.
+     */
+    public static function notifyCompanyFinance(int $companyId, string $event, string $title, string $message, array $opts = []): void
+    {
+        try {
+            $stmt = \db()->prepare('
+                SELECT u.id, u.email, u.phone
+                FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE u.company_id = ? AND u.is_active = 1
+                  AND r.slug IN ("finance_admin","company_admin","super_admin")
+            ');
+            $stmt->execute([$companyId]);
+            foreach ($stmt->fetchAll() as $u) {
+                self::dispatch($event, $title, $message, array_merge($opts, [
+                    'company_id'  => $companyId,
+                    'user_id'     => (int)$u['id'],
+                    'channels'    => $opts['channels'] ?? ['in_app'],
+                    'email_to'    => in_array('email',    $opts['channels'] ?? [], true) ? ($u['email'] ?: null) : null,
+                    'whatsapp_to' => in_array('whatsapp', $opts['channels'] ?? [], true) ? ($u['phone'] ?: null) : null,
+                ]));
+            }
+        } catch (\Throwable $e) {
+            error_log('notifyCompanyFinance failed: ' . $e->getMessage());
+        }
+    }
+
     public static function dispatch(string $event, string $title, string $message, array $opts = []): void
     {
         $userId    = $opts['user_id']    ?? null;

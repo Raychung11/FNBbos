@@ -68,4 +68,28 @@ return [
         'frequency_threshold'   => 5,
         'budget_warning_pct'    => 0.85,
     ],
+    // Phase 3: OCR receipt reading. Provider 'ocr_space' uses
+    // https://api.ocr.space (free tier with API key); 'noop' disables OCR.
+    'ocr' => [
+        'enabled'   => false,
+        'provider'  => 'ocr_space',
+        'api_key'   => '',
+        'language'  => 'eng',
+        'engine'    => 2,            // OCR.space engine 2 handles receipts well
+    ],
+    // Phase 3: Optional LLM hook for richer claim risk explanations. When
+    // disabled, RiskEngine falls back to its rule-based narrative.
+    'ai' => [
+        'enabled'  => false,
+        'provider' => 'anthropic',
+        'api_key'  => '',
+        'model'    => 'claude-haiku-4-5',
+        'max_tokens' => 400,
+    ],
+    // Phase 3: settlement / budget alert thresholds.
+    'alerts' => [
+        'settlement_delay_days' => 3,   // warn once a settlement is more than N days late
+        'budget_warn_pct'       => 0.85,
+        'budget_exceed_pct'     => 1.00,
+    ],
 ];

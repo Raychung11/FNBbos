@@ -50,12 +50,83 @@ final class RiskEngine
         $reasons = array_filter(array_column($factors, 'reason'));
         $explanation = self::buildExplanation($total, $level, $reasons);
 
+        // Phase 3: optional LLM rewrite. Only invoked when ai.enabled is true
+        // and an api_key is set. Network failures fall back to the rule-based
+        // narrative — risk scoring must never depend on a third-party.
+        if (!empty(\config('ai.enabled')) && !empty(\config('ai.api_key'))) {
+            $ai = self::aiRewriteExplanation($total, $level, $reasons, $claim, $context);
+            if ($ai !== null) $explanation = $ai;
+        }
+
         return [
             'score'       => $total,
             'level'       => $level,
             'factors'     => $factors,
             'explanation' => $explanation,
         ];
+    }
+
+    /**
+     * Optional: ask Anthropic to rewrite the rule-based reasons into a
+     * finance-grade narrative. Best-effort — returns null on any failure.
+     */
+    private static function aiRewriteExplanation(int $score, string $level, array $reasons, array $claim, array $ctx): ?string
+    {
+        if (!$reasons) return null;
+        $provider = (string)\config('ai.provider', 'anthropic');
+        if ($provider !== 'anthropic') return null;
+
+        $facts = [
+            'risk_score'     => $score,
+            'risk_level'     => $level,
+            'amount_rm'      => (float)($claim['amount'] ?? 0),
+            'claim_type'     => $claim['claim_type'] ?? '',
+            'avg_staff_rm'   => (float)($ctx['avg_staff']    ?? 0),
+            'avg_outlet_rm'  => (float)($ctx['avg_outlet']   ?? 0),
+            'avg_category_rm'=> (float)($ctx['avg_category'] ?? 0),
+            'recent_claims_3d' => (int)($ctx['recent_claim_count'] ?? 0),
+            'duplicate_receipts' => (int)($ctx['duplicate_receipt_count'] ?? 0),
+            'reasons'        => $reasons,
+        ];
+        $prompt = "You are a finance risk analyst summarising a Malaysian F&B staff claim. "
+            . "Write 2-3 sentences for a finance reviewer that explain the risk in plain English, "
+            . "without inventing facts. Keep it tight, professional, no emoji, no markdown.\n\n"
+            . "Facts (JSON):\n" . json_encode($facts, JSON_UNESCAPED_UNICODE);
+
+        $payload = json_encode([
+            'model'      => (string)\config('ai.model', 'claude-haiku-4-5'),
+            'max_tokens' => (int)\config('ai.max_tokens', 400),
+            'messages'   => [['role' => 'user', 'content' => $prompt]],
+        ]);
+
+        $ch = curl_init('https://api.anthropic.com/v1/messages');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => [
+                'content-type: application/json',
+                'x-api-key: ' . (string)\config('ai.api_key'),
+                'anthropic-version: 2023-06-01',
+            ],
+            CURLOPT_TIMEOUT        => 12,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($resp === false || $code !== 200) {
+            error_log('AI explanation failed: HTTP ' . (int)$code);
+            return null;
+        }
+        $j = json_decode((string)$resp, true);
+        $blocks = $j['content'] ?? [];
+        $text = '';
+        foreach ($blocks as $b) {
+            if (($b['type'] ?? null) === 'text' && !empty($b['text'])) $text .= $b['text'];
+        }
+        $text = trim($text);
+        return $text !== '' ? $text : null;
     }
 
     private static function amountAnomaly(array $claim, array $ctx): ?array

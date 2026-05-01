@@ -37,6 +37,7 @@ $active = $active ?? '';
     <a href="<?= e(url('pages/tax-profiles.php')) ?>"    class="<?= $active==='tax-profiles'?'active':'' ?>">Tax Profiles</a>
     <a href="<?= e(url('pages/approval-rules.php')) ?>"  class="<?= $active==='approval-rules'?'active':'' ?>">Approval Rules</a>
     <div class="section">Reports</div>
+    <a href="<?= e(url('pages/insights.php')) ?>"        class="<?= $active==='insights'?'active':'' ?>">Insights (charts)</a>
     <a href="<?= e(url('pages/reports.php')) ?>"         class="<?= $active==='reports'?'active':'' ?>">Reports &amp; Exports</a>
     <a href="<?= e(url('pages/audit-logs.php')) ?>"      class="<?= $active==='audit-logs'?'active':'' ?>">Audit Logs</a>
     <?php if (Rbac::can('demo.review')): ?>

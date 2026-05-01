@@ -32,6 +32,29 @@ if (requestMethod() === 'POST') {
         Notifier::dispatch(Notifier::EVENT_CLAIM_APPROVED, 'Claim approved',
             'Claim ' . $claim['claim_id'] . ' approved.',
             ['user_id' => (int)$claim['claimant_id'], 'company_id' => $companyId, 'entity' => 'claim', 'entity_id' => $id]);
+
+        // Phase 3: budget burn check post-approval.
+        $b = $pdo->prepare('SELECT monthly_claim_budget FROM outlets WHERE id = ?');
+        $b->execute([(int)$claim['outlet_id']]);
+        $budget = (float)$b->fetchColumn();
+        if ($budget > 0) {
+            $u = $pdo->prepare('SELECT COALESCE(SUM(amount),0) FROM claims WHERE outlet_id = ? AND claim_date BETWEEN ? AND ? AND approval_status IN ("approved","paid")');
+            $u->execute([(int)$claim['outlet_id'], date('Y-m-01'), date('Y-m-t')]);
+            $used = (float)$u->fetchColumn();
+            $pct = $used / $budget;
+            $threshold = (float)config('alerts.budget_exceed_pct', 1.0);
+            $warn      = (float)config('alerts.budget_warn_pct',   0.85);
+            if ($pct >= $threshold || $pct >= $warn) {
+                Notifier::notifyCompanyFinance(
+                    $companyId,
+                    Notifier::EVENT_BUDGET_EXCEEDED,
+                    sprintf('Outlet claim budget at %.0f%%', $pct * 100),
+                    sprintf("Outlet has used %s of %s (%.0f%%) this month after approving %s.",
+                        money($used), money($budget), $pct * 100, $claim['claim_id']),
+                    ['channels' => ['in_app','email','whatsapp'], 'entity' => 'outlet', 'entity_id' => (int)$claim['outlet_id']]
+                );
+            }
+        }
         flash('ok', 'Claim approved.');
     } elseif ($action === 'reject') {
         $pdo->prepare('UPDATE claims SET approval_status = "rejected", approved_at = ? WHERE id = ?')->execute([$now, $id]);
@@ -77,6 +100,12 @@ if ($claimId) {
         ORDER BY a.created_at DESC');
     $approvals->execute([$claimId]);
     $approvals = $approvals->fetchAll();
+
+    // Phase 3: load OCR extraction (if any) for side-by-side comparison.
+    $att = $pdo->prepare('SELECT ocr_json FROM claim_attachments WHERE claim_id = ? AND ocr_json IS NOT NULL ORDER BY id DESC LIMIT 1');
+    $att->execute([$claimId]);
+    $ocrJson = $att->fetchColumn();
+    $ocr = $ocrJson ? json_decode((string)$ocrJson, true) : null;
 } else {
     $queue = $pdo->prepare('
         SELECT c.id, c.claim_id, c.claim_type, c.amount, c.risk_score, c.risk_level,
@@ -149,6 +178,87 @@ include __DIR__ . '/../partials/header.php';
     </table>
   <?php endif; ?>
 </div>
+
+<?php if ($ocr || !empty($claim['ocr_status']) && $claim['ocr_status'] !== 'none'): ?>
+<div class="card">
+  <h3>OCR receipt extraction</h3>
+  <?php if ($claim['ocr_status'] === 'mismatch'): ?>
+    <div class="alert alert--warn">OCR receipt total differs from the claimed amount. Verify before approving.</div>
+  <?php elseif (!$ocr): ?>
+    <div class="alert alert--info">OCR ran but did not extract structured fields. Raw text only.</div>
+  <?php endif; ?>
+  <table class="data">
+    <thead><tr><th>Field</th><th>From receipt (OCR)</th><th>From claim form</th><th>Match?</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Total</td>
+        <td><?= $ocr && $ocr['total'] !== null ? e(money((float)$ocr['total'])) : '—' ?></td>
+        <td><?= e(money((float)$claim['amount'])) ?></td>
+        <td>
+          <?php if (!$ocr || $ocr['total'] === null): ?>—
+          <?php elseif (abs((float)$ocr['total'] - (float)$claim['amount']) / max((float)$ocr['total'],0.01) <= 0.05): ?>
+            <span class="badge badge--ok">match</span>
+          <?php else: ?>
+            <span class="badge badge--err">mismatch</span>
+          <?php endif; ?>
+        </td>
+      </tr>
+      <tr>
+        <td>Merchant</td>
+        <td><?= e($ocr['merchant'] ?? '—') ?></td>
+        <td><?= e($claim['supplier'] ?? '—') ?></td>
+        <td>
+          <?php if (!$ocr || empty($ocr['merchant']) || empty($claim['supplier'])): ?>—
+          <?php elseif (stripos($ocr['merchant'], (string)$claim['supplier']) !== false || stripos((string)$claim['supplier'], $ocr['merchant']) !== false): ?>
+            <span class="badge badge--ok">match</span>
+          <?php else: ?>
+            <span class="badge badge--warn">differs</span>
+          <?php endif; ?>
+        </td>
+      </tr>
+      <tr>
+        <td>Date</td>
+        <td><?= e($ocr['date'] ?? '—') ?></td>
+        <td><?= e($claim['claim_date']) ?></td>
+        <td>
+          <?php if (!$ocr || empty($ocr['date'])): ?>—
+          <?php elseif ($ocr['date'] === $claim['claim_date']): ?>
+            <span class="badge badge--ok">match</span>
+          <?php else: ?>
+            <span class="badge badge--warn">differs</span>
+          <?php endif; ?>
+        </td>
+      </tr>
+      <tr>
+        <td>SST</td>
+        <td><?= $ocr && $ocr['sst'] !== null ? e(money((float)$ocr['sst'])) : '—' ?></td>
+        <td>—</td><td>—</td>
+      </tr>
+      <tr>
+        <td>Receipt no.</td>
+        <td><?= e($ocr['receipt_no'] ?? '—') ?></td>
+        <td>—</td><td>—</td>
+      </tr>
+      <tr>
+        <td>Payment</td>
+        <td><?= e($ocr['payment'] ?? '—') ?></td>
+        <td><?= e($claim['payment_method'] ?? '—') ?></td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+  <?php if ($ocr && !empty($ocr['items'])): ?>
+    <details style="margin-top:10px;"><summary>Line items detected (<?= count($ocr['items']) ?>)</summary>
+      <ul style="font-size:13px;color:var(--ink-soft);"><?php foreach ($ocr['items'] as $it): ?><li><?= e($it) ?></li><?php endforeach; ?></ul>
+    </details>
+  <?php endif; ?>
+  <?php if ($ocr && !empty($ocr['raw_text'])): ?>
+    <details style="margin-top:6px;"><summary>Raw OCR text</summary>
+      <pre style="white-space:pre-wrap;font-size:12px;background:#f9fafc;padding:10px;border-radius:6px;"><?= e($ocr['raw_text']) ?></pre>
+    </details>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <div class="card">
   <h3>Claim details</h3>

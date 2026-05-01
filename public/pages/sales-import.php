@@ -5,6 +5,7 @@ use FNBBOS\Auth;
 use FNBBOS\Rbac;
 use FNBBOS\Csrf;
 use FNBBOS\Engine\Importer;
+use FNBBOS\Engine\Notifier;
 
 Auth::requireLogin();
 Rbac::require('sales.import');
@@ -36,6 +37,35 @@ if (requestMethod() === 'POST') {
         $result = Importer::ingestCsv($dest, Auth::companyId(), Auth::id());
         flash('ok', sprintf('Import complete: %d accepted, %d rejected (batch #%d).',
             $result['accepted'], $result['rejected'], $result['batch_id']));
+
+        // Phase 3: alert finance if this batch produced fee/tax discrepancies.
+        $disc = db()->prepare('
+            SELECT sfc.reconciliation_status AS status, COUNT(*) AS cnt, SUM(ABS(sfc.difference)) AS total_diff
+            FROM sales_fee_calculations sfc
+            JOIN sales_orders so ON so.id = sfc.sales_order_id
+            WHERE so.batch_id = ?
+              AND sfc.reconciliation_status IN ("over_deducted","under_deducted","fee_discrepancy","tax_discrepancy")
+            GROUP BY sfc.reconciliation_status');
+        $disc->execute([$result['batch_id']]);
+        $discRows = $disc->fetchAll();
+        if ($discRows) {
+            $totalDiff = 0; $totalCnt = 0; $lines = [];
+            foreach ($discRows as $r) {
+                $totalDiff += (float)$r['total_diff']; $totalCnt += (int)$r['cnt'];
+                $lines[] = sprintf('• %s: %d orders, %s', $r['status'], $r['cnt'], money((float)$r['total_diff']));
+            }
+            Notifier::notifyCompanyFinance(
+                Auth::companyId(),
+                Notifier::EVENT_SETTLEMENT_MISMATCH,
+                'Settlement discrepancies detected',
+                sprintf("Batch #%d produced %d discrepant orders worth %s in total.\n%s",
+                    $result['batch_id'], $totalCnt, money($totalDiff), implode("\n", $lines)),
+                [
+                    'entity' => 'sales_import_batch', 'entity_id' => $result['batch_id'],
+                    'channels' => ['in_app','email','whatsapp'],
+                ]
+            );
+        }
     } catch (Throwable $e) {
         flash('error', 'Import failed: ' . $e->getMessage());
     }

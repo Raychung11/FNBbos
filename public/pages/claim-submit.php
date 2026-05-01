@@ -7,6 +7,7 @@ use FNBBOS\Csrf;
 use FNBBOS\AuditLog;
 use FNBBOS\Engine\RiskEngine;
 use FNBBOS\Engine\Notifier;
+use FNBBOS\Engine\OcrEngine;
 use FNBBOS\ApprovalRouter;
 
 Auth::requireLogin();
@@ -53,6 +54,21 @@ if (requestMethod() === 'POST') {
         $receiptHash = hash_file('sha256', $receiptPath);
     }
 
+    // Phase 3: run OCR on the receipt up-front so the result can both be
+    // persisted and fed into the risk engine.
+    $ocr = null;
+    if ($receiptPath) {
+        try { $ocr = OcrEngine::extract($receiptPath); }
+        catch (Throwable $e) { error_log('OCR failed: ' . $e->getMessage()); }
+    }
+    $ocrTotal    = $ocr['total']    ?? null;
+    $ocrMerchant = $ocr['merchant'] ?? null;
+    $ocrDate     = $ocr['date']     ?? null;
+    $ocrStatus   = $ocr === null ? 'none' : 'success';
+    if ($ocr !== null && $ocrTotal !== null && abs($ocrTotal - $amount) / max($ocrTotal, 0.01) > 0.05) {
+        $ocrStatus = 'mismatch';
+    }
+
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -62,20 +78,27 @@ if (requestMethod() === 'POST') {
               (company_id, claimant_id, outlet_id, claim_id, claim_type, claim_date, amount,
                supplier, description, payment_method, cost_center,
                receipt_path, receipt_hash,
+               ocr_total, ocr_merchant, ocr_date, ocr_status,
                approval_status, paid_status, submitted_at, created_at)
-            VALUES (?,?,?,?,?,?,?, ?, ?, ?, ?, ?, ?, "submitted", "unpaid", ?, ?)');
+            VALUES (?,?,?,?,?,?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "submitted", "unpaid", ?, ?)');
         $now = nowDb();
         $insert->execute([
             $companyId, $userId, $outletId, $claimCode, $claimType, $claimDate, $amount,
             $supplier ?: null, $description ?: null, $paymentMethod ?: null, $costCenter ?: null,
             $receiptPath, $receiptHash,
+            $ocrTotal, $ocrMerchant, $ocrDate, $ocrStatus,
             $now, $now,
         ]);
         $claimId = (int)$pdo->lastInsertId();
 
         if ($receiptPath) {
-            $pdo->prepare('INSERT INTO claim_attachments (claim_id, file_path, file_hash, mime_type, created_at) VALUES (?,?,?,?,?)')
-                ->execute([$claimId, $receiptPath, $receiptHash, mime_content_type($receiptPath) ?: null, $now]);
+            $pdo->prepare('INSERT INTO claim_attachments (claim_id, file_path, file_hash, mime_type, ocr_json, created_at) VALUES (?,?,?,?,?,?)')
+                ->execute([
+                    $claimId, $receiptPath, $receiptHash,
+                    mime_content_type($receiptPath) ?: null,
+                    $ocr ? json_encode($ocr, JSON_UNESCAPED_UNICODE) : null,
+                    $now,
+                ]);
         }
 
         // Build risk-scoring context
@@ -117,6 +140,8 @@ if (requestMethod() === 'POST') {
 
         $r = $pdo->prepare('SELECT r.slug FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?');
         $r->execute([$userId]); $ctx['claimant_role'] = (string)$r->fetchColumn();
+
+        if ($ocrTotal !== null) $ctx['ocr_total'] = $ocrTotal;
 
         $claimRow = ['amount' => $amount, 'claim_type' => $claimType, 'submitted_at' => $now];
         $risk = RiskEngine::score($claimRow, $ctx);
