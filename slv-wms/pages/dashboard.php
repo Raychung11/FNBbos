@@ -317,8 +317,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine. ✓</li>
     <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows. ✓</li>
     <li><span class="font-medium">Phase 6:</span> Sales orders + pick lists desktop (multi-tax line calc, FIFO bin allocation, walk-path). ✓</li>
-    <li><span class="font-medium">Phase 7:</span> Mobile picking scan flow.</li>
-    <li><span class="font-medium">Phase 8+:</span> Invoicing + DO PDFs, transfers, adjustments, counts.</li>
+    <li><span class="font-medium">Phase 7:</span> Mobile picking scan flow (FIFO consume via record_issue, status auto-flip). ✓</li>
+    <li><span class="font-medium">Phase 8:</span> Invoicing + Delivery Order A4 PDFs.</li>
+    <li><span class="font-medium">Phase 9+:</span> Mobile dispatch + POD, adjustments, counts, transfers.</li>
   </ul>
 </div>
 <?php endif; ?>

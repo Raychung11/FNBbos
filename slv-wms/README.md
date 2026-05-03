@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)** + **Phase 6 (Sales orders + pick lists)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)** + **Phase 6 (Sales orders + pick lists)** + **Phase 7 (mobile picking scan)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -102,8 +102,19 @@ never drift.
 | Header nav       | `partials/header.php` — adds `In ▾` (GRNs) + `Out ▾` (Sales orders, Pick lists) for super_admin; `Sales ▾` for warehouse_manager; flat `Sales orders` link for sales role. |
 | Dashboard        | `pages/dashboard.php` — Open SOs + Pending pick lists tiles now wired to real counts; super_admin / manager / sales get a `+ New SO` quick action. |
 
-**Still pending** (Phase 7+): Mobile picking scan flow / invoicing + DO
-PDFs / transfers / adjustments / counts / dashboard charts / cron.
+## Phase 7 — mobile picking scan flow
+
+| Layer            | What ships                                                                                |
+|------------------|-------------------------------------------------------------------------------------------|
+| Engine           | `lib/so.php` adds `pick_execute()` (wraps `record_issue(movement_type=PICK)` inside a `db_tx`; idempotent on `scan_uuid`; updates `pick_items` + `so_items.qty_picked`), `pick_list_recompute_status()` (DRAFT → IN_PROGRESS → COMPLETED), `pick_list_maybe_close_so()` (flips parent SO PICKING → PICKED when every line is fully picked). |
+| JSON endpoints   | `api/v1/scan/pick_list_list.php` (GET — pickable lists for the user), `pick_list_get.php` (GET — items + walk path + suggested-bin info), `pick_execute.php` (POST — one pick, idempotent via UUID-v4). All gated by role + per-warehouse access. |
+| Mobile pick      | `m/pick.php` — pick a list → strict three-step UI per line: scan bin → scan SKU (rejects wrong product) → confirm qty. Suggested bin is highlighted; scanning a different bin is allowed (override is logged). After every pick the page reloads from the server so progress + status stay authoritative. |
+| Home tile        | `m/home.php` — Pick tile now reads "● ready to scan". |
+| PWA cache        | `service-worker.js` bumped to `slvwms-v0.7.0`; pre-caches `/m/pick.php`. |
+
+**Still pending** (Phase 8+): Invoicing + Delivery Order A4 PDFs /
+mobile dispatch + POD / transfers / adjustments / counts / dashboard
+charts / cron.
 
 ---
 
@@ -323,12 +334,13 @@ check fails.
 
 ---
 
-## Next: Phase 7
+## Next: Phase 8
 
-Phase 7 wires the **mobile pick scan flow**: a picker opens an assigned
-pick list on a phone, walks the zone-sorted path the SO/pick-list
-generator built, and at each step scans the bin then the SKU then enters
-the qty. Each scan posts to `/api/v1/scan/pick.php` which calls
-`record_issue()` (FIFO consume of `stock_layers` for that SKU+bin) and
-flips the pick list IN_PROGRESS → COMPLETED when the last unit lands.
-Hold here until Phase 6 deploys cleanly on Hostinger.
+Phase 8 wires **Invoicing + Delivery Order A4 PDF generation**: once a
+pick list completes, a manager can generate an invoice from the
+`qty_picked` (not `qty_ordered`, in case of short picks), with the tax
+breakdown persisted into `invoice_taxes` for SST filing. mPDF gets
+dropped into `vendor_local/`; the PDF generator reads the company logo
++ colours from app_settings. The DO follows with status flow READY →
+IN_TRANSIT → DELIVERED → RETURNED. Hold here until Phase 7 deploys
+cleanly.

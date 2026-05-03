@@ -252,3 +252,207 @@ function so_warehouse_code(int $warehouse_id): string
     $stmt->execute([$warehouse_id]);
     return (string)($stmt->fetchColumn() ?: '');
 }
+
+// -----------------------------------------------------------------------------
+// Phase 7 — pick execution
+// -----------------------------------------------------------------------------
+
+/**
+ * Execute one pick. Wraps record_issue(movement_type=PICK) and updates the
+ * pick_item + the parent pick_list / sales_order status.
+ *
+ * Idempotency: if the same scan_uuid is seen twice on the same pick_item,
+ * the second call is a no-op and returns the previously-recorded
+ * movement_id. record_issue() also has its own scan_uuid UNIQUE guard,
+ * but checking here lets us short-circuit before any work.
+ *
+ * @return array{movement_id:int, pick_item_id:int, pick_list_id:int,
+ *               pick_list_status:string, already?:bool}
+ */
+function pick_execute(
+    int $pick_item_id,
+    int $bin_id,
+    float $qty,
+    ?string $scan_uuid = null,
+    ?int $user_id = null
+): array {
+    if ($qty <= 0) throw new InvalidArgumentException('qty must be > 0.');
+
+    return db_tx(function () use ($pick_item_id, $bin_id, $qty, $scan_uuid, $user_id) {
+        $stmt = db()->prepare(
+            'SELECT pi.id           AS pick_item_id,
+                    pi.so_item_id,
+                    pi.product_id,
+                    pi.qty_to_pick,
+                    pi.qty_picked,
+                    pi.suggested_bin_id,
+                    pi.scan_uuid    AS existing_uuid,
+                    pi.movement_id  AS existing_movement,
+                    pl.id           AS pick_list_id,
+                    pl.warehouse_id,
+                    pl.company_id,
+                    pl.status       AS pl_status,
+                    pl.so_id
+               FROM pick_items pi
+               JOIN pick_lists pl ON pl.id = pi.pick_list_id
+              WHERE pi.id = ?
+              FOR UPDATE'
+        );
+        $stmt->execute([$pick_item_id]);
+        $pi = $stmt->fetch();
+        if (!$pi)                                                              throw new RuntimeException('Pick item not found.');
+        require_warehouse_access((int)$pi['warehouse_id']);
+        if (in_array($pi['pl_status'], ['CANCELLED', 'COMPLETED'], true)) {
+            throw new RuntimeException("Pick list is {$pi['pl_status']}; no more picks accepted.");
+        }
+
+        // Same-uuid replay → return the previous result.
+        if ($scan_uuid !== null && $scan_uuid !== '' && $pi['existing_uuid'] === $scan_uuid) {
+            return [
+                'movement_id'      => (int)$pi['existing_movement'],
+                'pick_item_id'     => $pick_item_id,
+                'pick_list_id'     => (int)$pi['pick_list_id'],
+                'pick_list_status' => (string)$pi['pl_status'],
+                'already'          => true,
+            ];
+        }
+
+        $remaining = (float)$pi['qty_to_pick'] - (float)$pi['qty_picked'];
+        if ($qty > $remaining + 1e-9) {
+            throw new RuntimeException(sprintf(
+                'Pick qty %s exceeds remaining %s on this line.',
+                rtrim(rtrim(number_format($qty, 4, '.', ''),       '0'), '.'),
+                rtrim(rtrim(number_format($remaining, 4, '.', ''), '0'), '.')
+            ));
+        }
+
+        // FIFO consume in the chosen bin (record_issue handles the bin-in-
+        // warehouse check too, but failing fast here gives a clearer error).
+        $issue = record_issue(
+            (int)$pi['company_id'],
+            (int)$pi['warehouse_id'],
+            (int)$pi['product_id'],
+            $bin_id,
+            $qty,
+            'PICK',
+            'pick_list',
+            (int)$pi['pick_list_id'],
+            $pick_item_id,
+            $user_id,
+            $scan_uuid,
+            'Pick item #' . $pick_item_id
+        );
+        $movement_id = (int)$issue['movement_id'];
+
+        // Update the pick_item.
+        db()->prepare(
+            'UPDATE pick_items
+                SET qty_picked         = qty_picked + ?,
+                    picked_from_bin_id = ?,
+                    movement_id        = ?,
+                    scan_uuid          = COALESCE(?, scan_uuid),
+                    picked_at          = NOW(),
+                    picked_by          = ?
+              WHERE id = ?'
+        )->execute([$qty, $bin_id, $movement_id, $scan_uuid, $user_id, $pick_item_id]);
+
+        // Bump the SO line's qty_picked so the SO header stays accurate.
+        db()->prepare(
+            'UPDATE so_items SET qty_picked = qty_picked + ? WHERE id = ?'
+        )->execute([$qty, (int)$pi['so_item_id']]);
+
+        $newStatus = pick_list_recompute_status((int)$pi['pick_list_id']);
+
+        audit_log('pick_execute', 'pick_items', $pick_item_id, [
+            'pick_list_id' => (int)$pi['pick_list_id'],
+            'qty'          => $qty,
+            'bin_id'       => $bin_id,
+            'movement_id'  => $movement_id,
+        ]);
+
+        return [
+            'movement_id'      => $movement_id,
+            'pick_item_id'     => $pick_item_id,
+            'pick_list_id'     => (int)$pi['pick_list_id'],
+            'pick_list_status' => $newStatus,
+        ];
+    });
+}
+
+/**
+ * Recompute the pick list's status from its items.
+ *   no items touched           → unchanged (stays DRAFT or whatever)
+ *   any item touched           → IN_PROGRESS, started_at stamped
+ *   every item fully picked    → COMPLETED, completed_at stamped, then
+ *                                pick_list_maybe_close_so() may flip the
+ *                                parent SO PICKING → PICKED.
+ *
+ * CANCELLED / COMPLETED are terminal and never auto-revert.
+ */
+function pick_list_recompute_status(int $pick_list_id): string
+{
+    $stmt = db()->prepare(
+        'SELECT pl.status AS cur_status, pl.so_id,
+                COUNT(pi.id) AS line_count,
+                SUM(CASE WHEN pi.qty_picked >= pi.qty_to_pick AND pi.qty_to_pick > 0 THEN 1 ELSE 0 END) AS lines_full,
+                SUM(CASE WHEN pi.qty_picked > 0 THEN 1 ELSE 0 END) AS lines_touched
+           FROM pick_lists pl
+      LEFT JOIN pick_items pi ON pi.pick_list_id = pl.id
+          WHERE pl.id = ?
+       GROUP BY pl.id'
+    );
+    $stmt->execute([$pick_list_id]);
+    $row = $stmt->fetch();
+    if (!$row) return '';
+
+    $cur = (string)$row['cur_status'];
+    if (in_array($cur, ['CANCELLED', 'COMPLETED'], true)) return $cur;
+
+    $lineCount    = (int)$row['line_count'];
+    $linesFull    = (int)$row['lines_full'];
+    $linesTouched = (int)$row['lines_touched'];
+
+    if ($lineCount > 0 && $linesFull === $lineCount) {
+        db()->prepare(
+            'UPDATE pick_lists
+                SET status = "COMPLETED",
+                    started_at   = COALESCE(started_at, NOW()),
+                    completed_at = COALESCE(completed_at, NOW())
+              WHERE id = ?'
+        )->execute([$pick_list_id]);
+        pick_list_maybe_close_so((int)$row['so_id']);
+        return 'COMPLETED';
+    }
+
+    if ($linesTouched > 0) {
+        db()->prepare(
+            'UPDATE pick_lists
+                SET status = "IN_PROGRESS",
+                    started_at = COALESCE(started_at, NOW())
+              WHERE id = ?'
+        )->execute([$pick_list_id]);
+        return 'IN_PROGRESS';
+    }
+
+    return $cur;
+}
+
+/**
+ * If every so_item has been fully picked, flip the SO PICKING → PICKED.
+ */
+function pick_list_maybe_close_so(int $so_id): void
+{
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) AS line_count,
+                SUM(CASE WHEN qty_picked >= qty_ordered AND qty_ordered > 0 THEN 1 ELSE 0 END) AS lines_full
+           FROM so_items
+          WHERE so_id = ?'
+    );
+    $stmt->execute([$so_id]);
+    $row = $stmt->fetch();
+    if ($row && (int)$row['line_count'] > 0 && (int)$row['lines_full'] === (int)$row['line_count']) {
+        db()->prepare(
+            'UPDATE sales_orders SET status = "PICKED" WHERE id = ? AND status = "PICKING"'
+        )->execute([$so_id]);
+    }
+}
