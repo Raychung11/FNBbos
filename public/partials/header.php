@@ -38,8 +38,14 @@ $active = $active ?? '';
     <a href="<?= e(url('pages/approval-rules.php')) ?>"  class="<?= $active==='approval-rules'?'active':'' ?>">Approval Rules</a>
     <div class="section">Reports</div>
     <a href="<?= e(url('pages/insights.php')) ?>"        class="<?= $active==='insights'?'active':'' ?>">Insights (charts)</a>
+    <a href="<?= e(url('pages/forecast.php')) ?>"        class="<?= $active==='forecast'?'active':'' ?>">Forecast</a>
+    <a href="<?= e(url('pages/leakage.php')) ?>"         class="<?= $active==='leakage'?'active':'' ?>">Leakage Predictions</a>
     <a href="<?= e(url('pages/reports.php')) ?>"         class="<?= $active==='reports'?'active':'' ?>">Reports &amp; Exports</a>
     <a href="<?= e(url('pages/audit-logs.php')) ?>"      class="<?= $active==='audit-logs'?'active':'' ?>">Audit Logs</a>
+    <?php if (Rbac::can('platforms.sync')): ?>
+      <div class="section">Integrations</div>
+      <a href="<?= e(url('pages/platform-sync.php')) ?>" class="<?= $active==='platform-sync'?'active':'' ?>">Platform API Sync</a>
+    <?php endif; ?>
     <?php if (Rbac::can('demo.review')): ?>
       <div class="section">Sales / SaaS</div>
       <a href="<?= e(url('pages/demo-requests.php')) ?>" class="<?= $active==='demo-requests'?'active':'' ?>">Demo Requests</a>

@@ -30,7 +30,10 @@ INSERT INTO permissions (slug, name) VALUES
   ('claims.pay',          'Mark claims as paid'),
   ('reports.view',        'View and export reports'),
   ('audit.view',          'View audit logs'),
-  ('demo.review',         'View and manage demo requests')
+  ('demo.review',         'View and manage demo requests'),
+  ('platforms.sync',      'Trigger platform API sync'),
+  ('forecast.view',       'View sales / claim forecasts'),
+  ('leakage.view',        'View profit leakage predictions')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Super Admin: every permission.
@@ -44,15 +47,17 @@ INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r JOIN permissions p ON p.slug IN
     ('dashboard.view','outlets.manage','users.manage','platforms.manage','tax.manage',
      'approvals.manage','sales.import','sales.view','bank.import','claims.view',
-     'claims.review','reports.view','audit.view','demo.review')
+     'claims.review','reports.view','audit.view','demo.review',
+     'platforms.sync','forecast.view','leakage.view')
   WHERE r.slug = 'company_admin'
 ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
 
--- Finance Admin: claims review/pay, reconciliation, reports.
+-- Finance Admin: claims review/pay, reconciliation, reports, forecasts.
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r JOIN permissions p ON p.slug IN
     ('dashboard.view','sales.view','bank.import','claims.view','claims.review',
-     'claims.pay','reports.view','audit.view','tax.manage')
+     'claims.pay','reports.view','audit.view','tax.manage',
+     'forecast.view','leakage.view')
   WHERE r.slug = 'finance_admin'
 ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
 

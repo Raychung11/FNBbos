@@ -511,4 +511,76 @@ CREATE TABLE IF NOT EXISTS demo_requests (
   KEY ix_dr_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- Phase 4: platform API integration + forecasting + leakage prediction.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS platform_credentials (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id    INT UNSIGNED NOT NULL,
+  platform_id   INT UNSIGNED NOT NULL,
+  credentials   JSON NOT NULL,
+  is_active     TINYINT(1) NOT NULL DEFAULT 1,
+  last_sync_at  DATETIME NULL,
+  last_status   VARCHAR(40) NULL,
+  created_at    DATETIME NOT NULL,
+  updated_at    DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_pc (company_id, platform_id),
+  CONSTRAINT fk_pc_company  FOREIGN KEY (company_id)  REFERENCES companies(id),
+  CONSTRAINT fk_pc_platform FOREIGN KEY (platform_id) REFERENCES platforms(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS platform_sync_logs (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id    INT UNSIGNED NOT NULL,
+  platform_id   INT UNSIGNED NOT NULL,
+  triggered_by  INT UNSIGNED NULL,
+  date_from     DATE NULL,
+  date_to       DATE NULL,
+  orders_pulled INT UNSIGNED NOT NULL DEFAULT 0,
+  orders_new    INT UNSIGNED NOT NULL DEFAULT 0,
+  status        VARCHAR(40) NOT NULL DEFAULT 'running',
+  message       TEXT NULL,
+  started_at    DATETIME NOT NULL,
+  finished_at   DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY ix_psl_lookup (company_id, platform_id, started_at),
+  CONSTRAINT fk_psl_company  FOREIGN KEY (company_id)  REFERENCES companies(id),
+  CONSTRAINT fk_psl_platform FOREIGN KEY (platform_id) REFERENCES platforms(id),
+  CONSTRAINT fk_psl_user     FOREIGN KEY (triggered_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS sales_forecasts (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id    INT UNSIGNED NOT NULL,
+  outlet_id     INT UNSIGNED NULL,
+  platform_id   INT UNSIGNED NULL,
+  forecast_date DATE NOT NULL,
+  forecast_low  DECIMAL(14,2) NOT NULL DEFAULT 0,
+  forecast_mid  DECIMAL(14,2) NOT NULL DEFAULT 0,
+  forecast_high DECIMAL(14,2) NOT NULL DEFAULT 0,
+  generated_at  DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_sf_lookup (company_id, outlet_id, platform_id, forecast_date),
+  CONSTRAINT fk_sf_company  FOREIGN KEY (company_id)  REFERENCES companies(id),
+  CONSTRAINT fk_sf_outlet   FOREIGN KEY (outlet_id)   REFERENCES outlets(id),
+  CONSTRAINT fk_sf_platform FOREIGN KEY (platform_id) REFERENCES platforms(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS leakage_findings (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id   INT UNSIGNED NOT NULL,
+  finding_type VARCHAR(60) NOT NULL,
+  severity     ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
+  entity_type  VARCHAR(40) NULL,
+  entity_id    INT UNSIGNED NULL,
+  projected_impact DECIMAL(14,2) NOT NULL DEFAULT 0,
+  evidence     TEXT NULL,
+  acknowledged_at DATETIME NULL,
+  created_at   DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY ix_lf_lookup (company_id, severity, created_at),
+  CONSTRAINT fk_lf_company FOREIGN KEY (company_id) REFERENCES companies(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
