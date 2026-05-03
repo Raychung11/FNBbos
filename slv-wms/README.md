@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)** + **Phase 6 (Sales orders + pick lists)** + **Phase 7 (mobile picking scan)**.
+> Currently shipped: **Phase 0** foundation · **Phase 1** settings · **Phase 2** master data · **Phase 3** FIFO + reports · **Phase 4** GRN desktop · **Phase 5** mobile receive + putaway · **Phase 6** SOs + pick lists · **Phase 7** mobile picking · **Phase 8** invoicing + DO + A4 PDFs.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -112,9 +112,22 @@ never drift.
 | Home tile        | `m/home.php` — Pick tile now reads "● ready to scan". |
 | PWA cache        | `service-worker.js` bumped to `slvwms-v0.7.0`; pre-caches `/m/pick.php`. |
 
-**Still pending** (Phase 8+): Invoicing + Delivery Order A4 PDFs /
-mobile dispatch + POD / transfers / adjustments / counts / dashboard
-charts / cron.
+## Phase 8 — invoicing + delivery orders + A4 print views
+
+| Layer            | What ships                                                                                |
+|------------------|-------------------------------------------------------------------------------------------|
+| Schema           | `migrations/009_invoices_dos.sql` — `invoices`, `invoice_items`, `invoice_taxes`, `delivery_orders`, `do_items`. Doc numbers come from `INV` and `DO` sequences seeded back in `002_seed.sql`. |
+| Engine           | `lib/invoice.php` — `invoice_generate_from_so()` bills `qty_picked` (so a short pick produces a short invoice, never billing for unsupplied stock); recomputes the multi-tax breakdown via `lib/tax.php` and persists each tax-code row into `invoice_taxes` for SST filing; flips SO PICKED → INVOICED. `do_create_from_invoice()` mirrors invoice items into `do_items`. `do_dispatch()` (READY → IN_TRANSIT, stamps driver + vehicle + dispatched_at). `do_mark_delivered()` (IN_TRANSIT → DELIVERED, flips parent SO INVOICED → DELIVERED when every active DO for the invoice is delivered). |
+| Invoices         | `pages/invoices/{index,view}.php` — list + status-driven view with Mark sent / Mark paid / Cancel / Create DO buttons. Per-invoice tax-code breakdown card. |
+| Delivery orders  | `pages/delivery_orders/{index,view}.php` — list + view with inline Dispatch form (driver + vehicle pickers) and Mark delivered button. Driver role can only mark *their own* DOs delivered. |
+| A4 print         | `pages/invoices/print.php` + `pages/delivery_orders/print.php` — full-bleed A4 layouts with company logo + brand colours + per-line tax + signature boxes. Header `actions` strip is `display:none` in `@media print`, so browser **Print → Save as PDF** drops a clean PDF. mPDF integration into `vendor_local/` is the polish step. |
+| SO view          | `pages/sales_orders/view.php` — adds **Generate invoice →** button when SO is PICKED and there's no active invoice; the existing-invoice banner links straight to the new invoice view. |
+| Header nav       | `partials/header.php` — `Out ▾` / `Sales ▾` dropdowns now contain Invoices + Delivery orders; `sales` role gets a flat `Invoices` link; `driver` role gets `My deliveries`; `packer` role gets `Pick lists` + `Delivery orders`. |
+| Dashboard        | `pages/dashboard.php` — new tiles **Pending deliveries** + **Unbilled (picked)** wired to real counts; `+ New SO` quick action joined by `Invoices` and `Delivery orders` chips. |
+
+**Still pending** (Phase 9+): Mobile dispatch + POD upload (driver
+flow) / transfers / adjustments / counts / dashboard charts / cron /
+mPDF drop in `vendor_local/`.
 
 ---
 
@@ -334,13 +347,12 @@ check fails.
 
 ---
 
-## Next: Phase 8
+## Next: Phase 9
 
-Phase 8 wires **Invoicing + Delivery Order A4 PDF generation**: once a
-pick list completes, a manager can generate an invoice from the
-`qty_picked` (not `qty_ordered`, in case of short picks), with the tax
-breakdown persisted into `invoice_taxes` for SST filing. mPDF gets
-dropped into `vendor_local/`; the PDF generator reads the company logo
-+ colours from app_settings. The DO follows with status flow READY →
-IN_TRANSIT → DELIVERED → RETURNED. Hold here until Phase 7 deploys
-cleanly.
+Phase 9 wires the **mobile dispatch + POD upload** flow: the assigned
+driver opens an IN_TRANSIT DO on a phone, captures the customer
+signature on a touch canvas + (optionally) snaps a delivery photo, and
+submits → the photo + signature land in `storage/pods/`, paths persist
+to `delivery_orders.pod_path` / `signature_path`, and the DO flips to
+DELIVERED. The customer signs once; the rest of the chain (DO →
+invoice → SO) auto-flips through.

@@ -20,5 +20,6 @@ require __DIR__ . '/stock.php';
 require __DIR__ . '/tax.php';
 require __DIR__ . '/grn.php';
 require __DIR__ . '/so.php';
+require __DIR__ . '/invoice.php';
 
 session_boot();

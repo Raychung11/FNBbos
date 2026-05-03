@@ -31,8 +31,10 @@ $NAV = (function(string $role): array {
                     ['label'=>'GRNs',       'href'=>'/pages/grn/index.php'],
                 ]],
                 ['type'=>'dropdown', 'label'=>'Out', 'items'=>[
-                    ['label'=>'Sales orders','href'=>'/pages/sales_orders/index.php'],
-                    ['label'=>'Pick lists',  'href'=>'/pages/pick_lists/index.php'],
+                    ['label'=>'Sales orders',    'href'=>'/pages/sales_orders/index.php'],
+                    ['label'=>'Pick lists',      'href'=>'/pages/pick_lists/index.php'],
+                    ['label'=>'Invoices',        'href'=>'/pages/invoices/index.php'],
+                    ['label'=>'Delivery orders', 'href'=>'/pages/delivery_orders/index.php'],
                 ]],
                 ['type'=>'dropdown', 'label'=>'Master', 'items'=>[
                     ['label'=>'Products / SKUs',     'href'=>'/pages/products/index.php'],
@@ -53,8 +55,10 @@ $NAV = (function(string $role): array {
                 ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
                 ['type'=>'link', 'label'=>'GRN',       'href'=>'/pages/grn/index.php'],
                 ['type'=>'dropdown', 'label'=>'Sales', 'items'=>[
-                    ['label'=>'Sales orders','href'=>'/pages/sales_orders/index.php'],
-                    ['label'=>'Pick lists',  'href'=>'/pages/pick_lists/index.php'],
+                    ['label'=>'Sales orders',    'href'=>'/pages/sales_orders/index.php'],
+                    ['label'=>'Pick lists',      'href'=>'/pages/pick_lists/index.php'],
+                    ['label'=>'Invoices',        'href'=>'/pages/invoices/index.php'],
+                    ['label'=>'Delivery orders', 'href'=>'/pages/delivery_orders/index.php'],
                 ]],
                 ['type'=>'dropdown', 'label'=>'Operations', 'items'=>[
                     ['label'=>'Locations',          'href'=>'/pages/locations/index.php'],
@@ -71,6 +75,7 @@ $NAV = (function(string $role): array {
             return [
                 ['type'=>'link', 'label'=>'Dashboard',     'href'=>'/index.php'],
                 ['type'=>'link', 'label'=>'Sales orders',  'href'=>'/pages/sales_orders/index.php'],
+                ['type'=>'link', 'label'=>'Invoices',      'href'=>'/pages/invoices/index.php'],
                 ['type'=>'link', 'label'=>'Customers',     'href'=>'/pages/customers/index.php'],
                 ['type'=>'link', 'label'=>'Products',      'href'=>'/pages/products/index.php'],
                 ['type'=>'link', 'label'=>'Reports',       'href'=>'/pages/reports/index.php'],
@@ -93,6 +98,17 @@ $NAV = (function(string $role): array {
             if ($role === 'receiver') {
                 array_splice($items, 1, 0, [
                     ['type'=>'link', 'label'=>'GRN', 'href'=>'/pages/grn/index.php'],
+                ]);
+            }
+            if ($role === 'driver') {
+                array_splice($items, 1, 0, [
+                    ['type'=>'link', 'label'=>'My deliveries', 'href'=>'/pages/delivery_orders/index.php?mine=1'],
+                ]);
+            }
+            if ($role === 'packer') {
+                array_splice($items, 1, 0, [
+                    ['type'=>'link', 'label'=>'Pick lists',      'href'=>'/pages/pick_lists/index.php'],
+                    ['type'=>'link', 'label'=>'Delivery orders', 'href'=>'/pages/delivery_orders/index.php'],
                 ]);
             }
             return $items;

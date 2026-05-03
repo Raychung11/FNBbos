@@ -115,6 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pick_id = so_generate_pick_list($id, null);
             flash('success', 'Pick list generated.');
             redirect('/pages/pick_lists/view.php?id=' . $pick_id);
+
+        case 'generate_invoice':
+            if (!in_array($so['status'], ['PICKED','PICKING'], true)) {
+                throw new RuntimeException('Generate invoice only from a PICKED SO.');
+            }
+            $inv_id = invoice_generate_from_so($id, $user_id);
+            flash('success', 'Invoice generated.');
+            redirect('/pages/invoices/view.php?id=' . $inv_id);
         }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
@@ -225,6 +233,34 @@ require __DIR__ . '/../../partials/header.php';
       <a href="/pages/pick_lists/view.php?id=<?= e_($pickList['id']) ?>"
          class="px-3 py-2 rounded text-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50">
         Open pick list <?= e_($pickList['pick_no']) ?>
+      </a>
+    <?php endif; ?>
+
+    <?php
+    // "Generate invoice" available once the SO is PICKED (and no active invoice yet).
+    $hasActiveInvoice = false;
+    if (in_array($so['status'], ['PICKED','PICKING','INVOICED','DELIVERED'], true)) {
+        $iCheck = db()->prepare("SELECT id FROM invoices WHERE so_id = ? AND status NOT IN ('CANCELLED','VOID') LIMIT 1");
+        $iCheck->execute([$id]);
+        $hasActiveInvoice = $iCheck->fetchColumn() !== false;
+    }
+    ?>
+    <?php if ($canWrite && $so['status'] === 'PICKED' && !$hasActiveInvoice): ?>
+      <form method="post" onsubmit="return confirm('Generate an invoice from picked qty?');">
+        <?= csrf_field() ?>
+        <input type="hidden" name="_action" value="generate_invoice">
+        <input type="hidden" name="id"      value="<?= e_($id) ?>">
+        <button class="slv-bg-primary text-white px-3 py-2 rounded text-sm font-medium">Generate invoice →</button>
+      </form>
+    <?php endif; ?>
+    <?php if ($hasActiveInvoice):
+      $iLook = db()->prepare("SELECT id, invoice_no FROM invoices WHERE so_id = ? AND status NOT IN ('CANCELLED','VOID') ORDER BY id DESC LIMIT 1");
+      $iLook->execute([$id]);
+      $invRow = $iLook->fetch();
+    ?>
+      <a href="/pages/invoices/view.php?id=<?= e_($invRow['id']) ?>"
+         class="px-3 py-2 rounded text-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+        Open invoice <?= e_($invRow['invoice_no']) ?>
       </a>
     <?php endif; ?>
 

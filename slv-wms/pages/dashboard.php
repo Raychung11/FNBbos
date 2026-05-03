@@ -113,6 +113,26 @@ $plStmt = db()->prepare(
 $plStmt->execute(array_merge([$cid], $accessibleParams));
 $counts['pending_pick'] = (int)$plStmt->fetchColumn();
 
+// Pending deliveries (Phase 8): READY / IN_TRANSIT.
+$doStmt = db()->prepare(
+    "SELECT COUNT(*) FROM delivery_orders
+      WHERE company_id = ?
+        AND status IN ('READY','IN_TRANSIT')
+        AND warehouse_id $accessibleClause"
+);
+$doStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['pending_do'] = (int)$doStmt->fetchColumn();
+
+// Unbilled but picked SOs (Phase 8 hint).
+$unbilledStmt = db()->prepare(
+    "SELECT COUNT(*) FROM sales_orders
+      WHERE company_id = ?
+        AND status = 'PICKED'
+        AND warehouse_id $accessibleClause"
+);
+$unbilledStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['unbilled'] = (int)$unbilledStmt->fetchColumn();
+
 // ---- Role-specific copy + tiles ---------------------------------------------
 
 /** @return array{
@@ -134,18 +154,18 @@ function dashboard_view_for(string $role, array $counts): array
                     ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
                     ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
                     ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
-                    ['Customers',            $counts['customers'],                             'Master → Customers',         '/pages/customers/index.php'],
                     ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
                     ['Open SOs',             $counts['open_so'],                               'Confirm → pick',             '/pages/sales_orders/index.php?status=CONFIRMED'],
-                    ['Pending pick lists',   $counts['pending_pick'],                          'Phase 7 mobile picking',     '/pages/pick_lists/index.php?status=DRAFT'],
-                    ['In-transit transfers', '—',                                              'Phase 11',                   null],
+                    ['Pending pick lists',   $counts['pending_pick'],                          'Pick → invoice',             '/pages/pick_lists/index.php?status=DRAFT'],
+                    ['Unbilled (picked)',    $counts['unbilled'],                              'Generate invoice',           '/pages/sales_orders/index.php?status=PICKED'],
+                    ['Pending deliveries',   $counts['pending_do'],                            'Dispatch → deliver',         '/pages/delivery_orders/index.php?status=READY'],
                 ],
                 'actions' => [
                     ['+ New GRN',        '/pages/grn/create.php'],
                     ['+ New SO',         '/pages/sales_orders/create.php'],
+                    ['Invoices',         '/pages/invoices/index.php'],
+                    ['Delivery orders',  '/pages/delivery_orders/index.php'],
                     ['Settings',         '/pages/settings/index.php'],
-                    ['Users & access',   '/pages/users/index.php'],
-                    ['CSV imports',      '/pages/imports/index.php'],
                 ],
             ];
 
@@ -156,25 +176,25 @@ function dashboard_view_for(string $role, array $counts): array
                 'banner_class' => 'bg-emerald-50 border-emerald-200 text-emerald-900',
                 'tiles' => [
                     ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
-                    ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
-                    ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
                     ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
                     ['Open SOs',             $counts['open_so'],                               'Sales orders',               '/pages/sales_orders/index.php'],
                     ['Pending pick lists',   $counts['pending_pick'],                          'Pick lists',                 '/pages/pick_lists/index.php?status=DRAFT'],
+                    ['Unbilled (picked)',    $counts['unbilled'],                              'Generate invoice',           '/pages/sales_orders/index.php?status=PICKED'],
+                    ['Pending deliveries',   $counts['pending_do'],                            'Dispatch → deliver',         '/pages/delivery_orders/index.php?status=READY'],
                 ],
                 'actions' => [
                     ['+ New GRN',          '/pages/grn/create.php'],
                     ['+ New SO',           '/pages/sales_orders/create.php'],
-                    ['Locations',          '/pages/locations/index.php'],
+                    ['Invoices',           '/pages/invoices/index.php'],
+                    ['Delivery orders',    '/pages/delivery_orders/index.php'],
                     ['Stock on hand',      '/pages/reports/stock_on_hand.php'],
-                    ['Stock movements',    '/pages/reports/stock_movements.php'],
                 ],
             ];
 
         case 'sales':
             return [
                 'role_label'   => 'Sales',
-                'sub'          => 'Find customers, check stock availability, raise sales orders.',
+                'sub'          => 'Find customers, check stock availability, raise sales orders, follow invoices.',
                 'banner_class' => 'bg-sky-50 border-sky-200 text-sky-900',
                 'tiles' => [
                     ['Active customers', $counts['customers'], 'Master → Customers', '/pages/customers/index.php'],
@@ -184,8 +204,8 @@ function dashboard_view_for(string $role, array $counts): array
                 ],
                 'actions' => [
                     ['+ New SO',          '/pages/sales_orders/create.php'],
+                    ['Invoices',          '/pages/invoices/index.php'],
                     ['Find a customer',   '/pages/customers/index.php'],
-                    ['Browse SKUs',       '/pages/products/index.php'],
                     ['Check stock',       '/pages/reports/stock_on_hand.php'],
                 ],
             ];
@@ -318,8 +338,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows. ✓</li>
     <li><span class="font-medium">Phase 6:</span> Sales orders + pick lists desktop (multi-tax line calc, FIFO bin allocation, walk-path). ✓</li>
     <li><span class="font-medium">Phase 7:</span> Mobile picking scan flow (FIFO consume via record_issue, status auto-flip). ✓</li>
-    <li><span class="font-medium">Phase 8:</span> Invoicing + Delivery Order A4 PDFs.</li>
-    <li><span class="font-medium">Phase 9+:</span> Mobile dispatch + POD, adjustments, counts, transfers.</li>
+    <li><span class="font-medium">Phase 8:</span> Invoicing + Delivery Order generation with A4 print views (browser Print → PDF until mPDF drops). ✓</li>
+    <li><span class="font-medium">Phase 9:</span> Mobile dispatch + POD upload.</li>
+    <li><span class="font-medium">Phase 10+:</span> Adjustments, counts, transfers, dashboard charts.</li>
   </ul>
 </div>
 <?php endif; ?>
