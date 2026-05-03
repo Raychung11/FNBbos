@@ -94,7 +94,13 @@ function attempt_login(string $email, string $password): bool
     db()->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')
         ->execute([$row['id']]);
 
+    // Full session reset on login: rotate the cookie id AND wipe any leftover
+    // keys (CSRF, selected warehouse, flash, etc.) from a previous user that
+    // might still be sitting in $_SESSION. Without this, switching from
+    // super_admin → sales would inherit super_admin's selected_warehouse_id
+    // and the dashboard would render with the wrong warehouse pre-selected.
     session_regenerate_id(true);
+    $_SESSION = [];
     $_SESSION['user'] = [
         'id'         => (int)$row['id'],
         'company_id' => (int)$row['company_id'],

@@ -200,6 +200,9 @@ $roleChipClass = $ROLE_COLOURS[$role] ?? 'bg-gray-200 text-gray-700';
         <span class="opacity-80 text-xs"><?= e_($user['name'] ?? '') ?></span>
       </div>
 
+      <a href="/logout.php?next=/login.php" class="hover:text-white/80 underline-offset-2 hover:underline" title="Sign out and pick a different account">
+        Switch
+      </a>
       <a href="/logout.php" class="hover:text-white/80 underline-offset-2 hover:underline">Sign out</a>
     </nav>
   </div>

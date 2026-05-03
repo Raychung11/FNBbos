@@ -12,9 +12,12 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/bootstrap.php';
 
-if (is_logged_in()) {
-    redirect('/index.php');
-}
+// Note: we deliberately do NOT auto-redirect when the visitor is already
+// signed in. Otherwise the operator can't switch user — they'd be sent
+// straight to the existing user's dashboard, never seeing the login form
+// or the Demo accounts panel. The page renders normally and a banner at
+// the top offers Continue / Sign out so they can switch deliberately.
+$activeUser = current_user();
 
 $error = null;
 $email = (string)($_GET['email'] ?? '');
@@ -28,19 +31,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Email and password are required.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
-    } elseif (!attempt_login($email, $pass)) {
-        $error = 'Invalid credentials.';
     } else {
-        // Honour ?next= when it's a same-origin relative path; otherwise
-        // route by role — pickers/packers/drivers/receivers land on the
-        // scanner, everyone else on the desktop dashboard.
-        $next = (string)($_GET['next'] ?? '');
-        if ($next === '' || !preg_match('#^/[^/\\\\]#', $next)) {
-            $next = default_landing_url(current_user()['role'] ?? 'viewer');
+        // If a different user is already signed in, log them out first so
+        // attempt_login() starts from a clean session. (attempt_login() also
+        // resets $_SESSION internally, but explicit logout() also kills the
+        // CSRF token from the previous user's tabs.)
+        if ($activeUser && strcasecmp((string)$activeUser['email'], $email) !== 0) {
+            logout();
+            session_boot();
         }
-        redirect($next);
+        if (!attempt_login($email, $pass)) {
+            $error = 'Invalid credentials.';
+        } else {
+            $next = (string)($_GET['next'] ?? '');
+            if ($next === '' || !preg_match('#^/[^/\\\\]#', $next)) {
+                $next = default_landing_url(current_user()['role'] ?? 'viewer');
+            }
+            redirect($next);
+        }
     }
 }
+
+// Re-read after a possible logout/login cycle.
+$activeUser = current_user();
 
 // Detect demo accounts that still have the seeded password.
 const DEMO_SEED_HASH = '$2y$12$qH2aqyG5I3UIbWWZpvhR/O10WQ/kSsBpqhY9NvGDOSE5wxp8jBism'; // ChangeMe!2026
@@ -59,10 +72,27 @@ try {
 }
 
 $PAGE_TITLE   = 'Sign in';
-$AUTH_HEADING = 'Sign in';
-$AUTH_SUB     = 'Use your work email and password to access the warehouse.';
+$AUTH_HEADING = $activeUser ? 'Switch user' : 'Sign in';
+$AUTH_SUB     = $activeUser
+    ? 'You are already signed in. Submit a different email + password to switch, or continue to the dashboard.'
+    : 'Use your work email and password to access the warehouse.';
 require __DIR__ . '/partials/auth_layout.php';
 ?>
+
+<?php if ($activeUser): ?>
+  <div class="mb-4 border border-blue-200 bg-blue-50 rounded p-3 text-sm flex items-start justify-between gap-3">
+    <div class="text-blue-900">
+      Currently signed in as <strong><?= e_($activeUser['name']) ?></strong>
+      <span class="font-mono text-xs">(<?= e_($activeUser['role']) ?>)</span><br>
+      <span class="text-xs text-blue-800/80"><?= e_($activeUser['email']) ?></span>
+    </div>
+    <div class="flex flex-col gap-1 text-right">
+      <a href="/index.php" class="text-xs text-indigo-700 hover:underline">Continue →</a>
+      <a href="/logout.php?next=/login.php" class="text-xs text-red-700 hover:underline">Sign out</a>
+    </div>
+  </div>
+<?php endif; ?>
+
 <?php if ($error): ?>
   <div class="mb-4 border border-red-200 bg-red-50 text-red-800 text-sm rounded px-3 py-2">
     <?= e_($error) ?>
