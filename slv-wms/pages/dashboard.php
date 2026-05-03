@@ -93,6 +93,26 @@ $pendStmt = db()->prepare(
 $pendStmt->execute(array_merge([$cid], $accessibleParams));
 $counts['pending_grn'] = (int)$pendStmt->fetchColumn();
 
+// Open SOs (Phase 6): DRAFT / CONFIRMED / PICKING / PICKED.
+$soStmt = db()->prepare(
+    "SELECT COUNT(*) FROM sales_orders
+      WHERE company_id = ?
+        AND status IN ('DRAFT','CONFIRMED','PICKING','PICKED')
+        AND warehouse_id $accessibleClause"
+);
+$soStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['open_so'] = (int)$soStmt->fetchColumn();
+
+// Pending pick lists (Phase 6): DRAFT / ASSIGNED / IN_PROGRESS.
+$plStmt = db()->prepare(
+    "SELECT COUNT(*) FROM pick_lists
+      WHERE company_id = ?
+        AND status IN ('DRAFT','ASSIGNED','IN_PROGRESS')
+        AND warehouse_id $accessibleClause"
+);
+$plStmt->execute(array_merge([$cid], $accessibleParams));
+$counts['pending_pick'] = (int)$plStmt->fetchColumn();
+
 // ---- Role-specific copy + tiles ---------------------------------------------
 
 /** @return array{
@@ -114,17 +134,17 @@ function dashboard_view_for(string $role, array $counts): array
                     ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
                     ['Stock value (FIFO)',   money($counts['stock_value']),                    'Reports → Stock on hand',    '/pages/reports/stock_on_hand.php'],
                     ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
-                    ['Suppliers',            $counts['suppliers'],                             'Master → Suppliers',         '/pages/suppliers/index.php'],
                     ['Customers',            $counts['customers'],                             'Master → Customers',         '/pages/customers/index.php'],
                     ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
-                    ['Pending pick lists',   '—',                                              'Phase 6',                    null],
+                    ['Open SOs',             $counts['open_so'],                               'Confirm → pick',             '/pages/sales_orders/index.php?status=CONFIRMED'],
+                    ['Pending pick lists',   $counts['pending_pick'],                          'Phase 7 mobile picking',     '/pages/pick_lists/index.php?status=DRAFT'],
                     ['In-transit transfers', '—',                                              'Phase 11',                   null],
                 ],
                 'actions' => [
                     ['+ New GRN',        '/pages/grn/create.php'],
+                    ['+ New SO',         '/pages/sales_orders/create.php'],
                     ['Settings',         '/pages/settings/index.php'],
                     ['Users & access',   '/pages/users/index.php'],
-                    ['Seed demo data',   '/pages/settings/demo_seed.php'],
                     ['CSV imports',      '/pages/imports/index.php'],
                 ],
             ];
@@ -139,11 +159,12 @@ function dashboard_view_for(string $role, array $counts): array
                     ['Active bins',          $counts['bins'],                                  'Master → Locations',         '/pages/locations/index.php'],
                     ['Active SKUs',          $counts['products'],                              'Master → Products',          '/pages/products/index.php'],
                     ['Pending GRN',          $counts['pending_grn'],                           'Receive → putaway',          '/pages/grn/index.php?status=RECEIVING'],
-                    ['Pending pick lists',   '—',                                              'Phase 6',                    null],
-                    ['Pending deliveries',   '—',                                              'Phase 8',                    null],
+                    ['Open SOs',             $counts['open_so'],                               'Sales orders',               '/pages/sales_orders/index.php'],
+                    ['Pending pick lists',   $counts['pending_pick'],                          'Pick lists',                 '/pages/pick_lists/index.php?status=DRAFT'],
                 ],
                 'actions' => [
                     ['+ New GRN',          '/pages/grn/create.php'],
+                    ['+ New SO',           '/pages/sales_orders/create.php'],
                     ['Locations',          '/pages/locations/index.php'],
                     ['Stock on hand',      '/pages/reports/stock_on_hand.php'],
                     ['Stock movements',    '/pages/reports/stock_movements.php'],
@@ -158,10 +179,11 @@ function dashboard_view_for(string $role, array $counts): array
                 'tiles' => [
                     ['Active customers', $counts['customers'], 'Master → Customers', '/pages/customers/index.php'],
                     ['Active SKUs',      $counts['products'],  'Master → Products',  '/pages/products/index.php'],
-                    ['Open SOs',         '—',                  'Phase 6',            null],
+                    ['Open SOs',         $counts['open_so'],   'Sales orders',       '/pages/sales_orders/index.php'],
                     ['Stock available',  money($counts['stock_value']), 'Stock on hand', '/pages/reports/stock_on_hand.php'],
                 ],
                 'actions' => [
+                    ['+ New SO',          '/pages/sales_orders/create.php'],
                     ['Find a customer',   '/pages/customers/index.php'],
                     ['Browse SKUs',       '/pages/products/index.php'],
                     ['Check stock',       '/pages/reports/stock_on_hand.php'],
@@ -294,8 +316,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 3:</span> FIFO engine, opening-stock importer, stock-on-hand &amp; movements reports. ✓</li>
     <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine. ✓</li>
     <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows. ✓</li>
-    <li><span class="font-medium">Phase 6:</span> Sales orders + pick lists desktop (multi-tax line calc).</li>
-    <li><span class="font-medium">Phase 7+:</span> Mobile pick, invoicing, transfers.</li>
+    <li><span class="font-medium">Phase 6:</span> Sales orders + pick lists desktop (multi-tax line calc, FIFO bin allocation, walk-path). ✓</li>
+    <li><span class="font-medium">Phase 7:</span> Mobile picking scan flow.</li>
+    <li><span class="font-medium">Phase 8+:</span> Invoicing + DO PDFs, transfers, adjustments, counts.</li>
   </ul>
 </div>
 <?php endif; ?>

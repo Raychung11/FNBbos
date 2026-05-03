@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)** + **Phase 6 (Sales orders + pick lists)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -89,9 +89,21 @@ never drift.
 | Home tiles       | `m/home.php` — receive + putaway tiles now read "● ready to scan" instead of "ships in Phase 5"; tiles for unimplemented flows stay dashed and dimmed. |
 | PWA cache        | `service-worker.js` bumped to `slvwms-v0.5.0`; pre-caches the new pages + `scanner.js`. |
 
-**Still pending** (Phase 6+): Sales orders + pick lists desktop /
-mobile picking / invoicing + DO PDFs / transfers / adjustments /
-counts / dashboard charts / cron.
+## Phase 6 — Sales orders + pick lists desktop
+
+| Layer            | What ships                                                                                |
+|------------------|-------------------------------------------------------------------------------------------|
+| Schema           | `migrations/007_sales_orders.sql` — `sales_orders`, `so_items`, `pick_lists`, `pick_items`. `migrations/008_pick_sequence.sql` adds the `PICK` doc-number sequence. |
+| Tax engine       | `lib/tax.php` — `tax_compute_line()` with compound stacking (a `is_compound=1` code applies to subtotal + earlier taxes), `tax_aggregate()` produces grand totals + per-tax-code breakdown that Phase 8's `invoice_taxes` will store verbatim. |
+| SO engine        | `lib/so.php` — `so_recompute_totals()` (line + header), `so_stock_availability()` (live FIFO availability per line for the warning), `so_generate_pick_list()` (FIFO across bins, one `pick_item` per (line, bin), walk-path sort `zone → rack → bin`, short-stock fallback rows with no suggested bin). |
+| List + create    | `pages/sales_orders/{index,create}.php` — Alpine line repeater that auto-fills the line's tax group from the customer's default (falling back to the SKU's). Stored amounts re-computed on every save. |
+| View / confirm   | `pages/sales_orders/view.php` — status-driven flow: edit lines (DRAFT) → Confirm (DRAFT → CONFIRMED) → Generate pick list (CONFIRMED → PICKING). Live tax-code breakdown card and per-line stock availability with shortage badges. |
+| Pick lists       | `pages/pick_lists/{index,view}.php` — list with progress bars, walk-path view with bin / SKU / barcode / qty / picker columns. Read-only on desktop; the actual stock issue happens in Phase 7 mobile picking. |
+| Header nav       | `partials/header.php` — adds `In ▾` (GRNs) + `Out ▾` (Sales orders, Pick lists) for super_admin; `Sales ▾` for warehouse_manager; flat `Sales orders` link for sales role. |
+| Dashboard        | `pages/dashboard.php` — Open SOs + Pending pick lists tiles now wired to real counts; super_admin / manager / sales get a `+ New SO` quick action. |
+
+**Still pending** (Phase 7+): Mobile picking scan flow / invoicing + DO
+PDFs / transfers / adjustments / counts / dashboard charts / cron.
 
 ---
 
@@ -311,11 +323,12 @@ check fails.
 
 ---
 
-## Next: Phase 6
+## Next: Phase 7
 
-Phase 6 builds **Sales Orders + Pick Lists desktop**: a sales user
-creates an SO against a customer + fulfilling warehouse with multi-tax
-line calculation (per `lib/tax.php`), the system warns on insufficient
-stock at confirmation, and a pick list is generated with a walk path
-sorted by zone → rack → bin code. Mobile pick lands in Phase 7. Hold
-here until Phase 5 deploys cleanly on Hostinger.
+Phase 7 wires the **mobile pick scan flow**: a picker opens an assigned
+pick list on a phone, walks the zone-sorted path the SO/pick-list
+generator built, and at each step scans the bin then the SKU then enters
+the qty. Each scan posts to `/api/v1/scan/pick.php` which calls
+`record_issue()` (FIFO consume of `stock_layers` for that SKU+bin) and
+flips the pick list IN_PROGRESS → COMPLETED when the last unit lands.
+Hold here until Phase 6 deploys cleanly on Hostinger.

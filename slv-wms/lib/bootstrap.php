@@ -17,6 +17,8 @@ require __DIR__ . '/docnum.php';
 require __DIR__ . '/csv.php';
 require __DIR__ . '/mail.php';
 require __DIR__ . '/stock.php';
+require __DIR__ . '/tax.php';
 require __DIR__ . '/grn.php';
+require __DIR__ . '/so.php';
 
 session_boot();

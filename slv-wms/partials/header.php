@@ -27,7 +27,13 @@ $NAV = (function(string $role): array {
         case 'super_admin':
             return [
                 ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
-                ['type'=>'link', 'label'=>'GRN',       'href'=>'/pages/grn/index.php'],
+                ['type'=>'dropdown', 'label'=>'In', 'items'=>[
+                    ['label'=>'GRNs',       'href'=>'/pages/grn/index.php'],
+                ]],
+                ['type'=>'dropdown', 'label'=>'Out', 'items'=>[
+                    ['label'=>'Sales orders','href'=>'/pages/sales_orders/index.php'],
+                    ['label'=>'Pick lists',  'href'=>'/pages/pick_lists/index.php'],
+                ]],
                 ['type'=>'dropdown', 'label'=>'Master', 'items'=>[
                     ['label'=>'Products / SKUs',     'href'=>'/pages/products/index.php'],
                     ['label'=>'Categories',          'href'=>'/pages/categories/index.php'],
@@ -46,6 +52,10 @@ $NAV = (function(string $role): array {
             return [
                 ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
                 ['type'=>'link', 'label'=>'GRN',       'href'=>'/pages/grn/index.php'],
+                ['type'=>'dropdown', 'label'=>'Sales', 'items'=>[
+                    ['label'=>'Sales orders','href'=>'/pages/sales_orders/index.php'],
+                    ['label'=>'Pick lists',  'href'=>'/pages/pick_lists/index.php'],
+                ]],
                 ['type'=>'dropdown', 'label'=>'Operations', 'items'=>[
                     ['label'=>'Locations',          'href'=>'/pages/locations/index.php'],
                     ['label'=>'Products / SKUs',    'href'=>'/pages/products/index.php'],
@@ -59,10 +69,11 @@ $NAV = (function(string $role): array {
 
         case 'sales':
             return [
-                ['type'=>'link', 'label'=>'Dashboard', 'href'=>'/index.php'],
-                ['type'=>'link', 'label'=>'Customers', 'href'=>'/pages/customers/index.php'],
-                ['type'=>'link', 'label'=>'Products',  'href'=>'/pages/products/index.php'],
-                ['type'=>'link', 'label'=>'Reports',   'href'=>'/pages/reports/index.php'],
+                ['type'=>'link', 'label'=>'Dashboard',     'href'=>'/index.php'],
+                ['type'=>'link', 'label'=>'Sales orders',  'href'=>'/pages/sales_orders/index.php'],
+                ['type'=>'link', 'label'=>'Customers',     'href'=>'/pages/customers/index.php'],
+                ['type'=>'link', 'label'=>'Products',      'href'=>'/pages/products/index.php'],
+                ['type'=>'link', 'label'=>'Reports',       'href'=>'/pages/reports/index.php'],
             ];
 
         case 'viewer':
