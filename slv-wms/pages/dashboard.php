@@ -293,8 +293,9 @@ require __DIR__ . '/../partials/header.php';
     <li><span class="font-medium">Phase 2:</span> Master data (categories, products, bins, suppliers, customers + CSV imports). ✓</li>
     <li><span class="font-medium">Phase 3:</span> FIFO engine, opening-stock importer, stock-on-hand &amp; movements reports. ✓</li>
     <li><span class="font-medium">Phase 4:</span> GRN — desktop receive + putaway suggestion engine. ✓</li>
-    <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows.</li>
-    <li><span class="font-medium">Phase 6+:</span> Sales orders, picking, invoicing, transfers.</li>
+    <li><span class="font-medium">Phase 5:</span> Mobile PWA shell + receive + putaway scan flows. ✓</li>
+    <li><span class="font-medium">Phase 6:</span> Sales orders + pick lists desktop (multi-tax line calc).</li>
+    <li><span class="font-medium">Phase 7+:</span> Mobile pick, invoicing, transfers.</li>
   </ul>
 </div>
 <?php endif; ?>

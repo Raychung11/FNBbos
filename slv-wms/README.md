@@ -3,7 +3,7 @@
 Warehouse Management System for **SLV Group Sdn. Bhd.** Deployed on Hostinger
 shared hosting (plain PHP 8.x + MySQL, no Composer, no Node build step).
 
-> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)**.
+> Currently shipped: **Phase 0 (foundation)** + **Phase 1 (settings backend)** + **Phase 2 (master data)** + **Phase 3 (FIFO engine + reports)** + **Phase 4 (GRN desktop)** + **Phase 5 (mobile receive + putaway scan)**.
 > Subsequent phases land alongside without breaking existing files.
 
 ---
@@ -78,8 +78,20 @@ Status machine: `DRAFT → RECEIVING → RECEIVED → PUTAWAY → CLOSED`, with
 `grn_items.qty_received` / `qty_putaway` after every action so it can
 never drift.
 
-**Still pending** (Phase 5+): Mobile receive+putaway scan / picking /
-invoicing+DO PDFs / transfers / adjustments / counts / dashboard charts / cron.
+## Phase 5 — mobile receive + putaway scan flows
+
+| Layer            | What ships                                                                                |
+|------------------|-------------------------------------------------------------------------------------------|
+| Scanner shell    | `assets/js/scanner.js` — `SLVScanner.start/stop/beep/api`. Loads `html5-qrcode` from CDN on demand, debounces duplicate reads (1.5s window), beeps + vibrates, and provides a CSRF-aware `fetch` wrapper. |
+| JSON endpoints   | `api/v1/scan/_common.php` (auth + JSON-body parsing), `grn_list.php`, `grn_get.php`, `sku_lookup.php`, `bin_lookup.php`, `grn_receive.php`, `grn_putaway.php`. All gated by role + per-warehouse access; CSRF via `X-CSRF-Token` header. |
+| Mobile receive   | `m/receive.php` — pick GRN → scan SKU → enter qty + actual unit cost → submit. Status auto-flips DRAFT → RECEIVING → RECEIVED. |
+| Mobile putaway   | `m/putaway.php` — pick GRN → scan SKU (resolves to its line) → suggested-bin chip with "use it" shortcut → scan or type bin → confirm qty + cost → submit. Idempotent via client-generated UUID-v4 `scan_uuid` (one button-tap, one stock layer). Status auto-flips RECEIVED → PUTAWAY → CLOSED. |
+| Home tiles       | `m/home.php` — receive + putaway tiles now read "● ready to scan" instead of "ships in Phase 5"; tiles for unimplemented flows stay dashed and dimmed. |
+| PWA cache        | `service-worker.js` bumped to `slvwms-v0.5.0`; pre-caches the new pages + `scanner.js`. |
+
+**Still pending** (Phase 6+): Sales orders + pick lists desktop /
+mobile picking / invoicing + DO PDFs / transfers / adjustments /
+counts / dashboard charts / cron.
 
 ---
 
@@ -299,12 +311,11 @@ check fails.
 
 ---
 
-## Next: Phase 5
+## Next: Phase 6
 
-Phase 5 builds the **mobile PWA shell + Receive + Putaway scan flows**:
-the receiver opens a GRN on a phone, scans SKU + qty into staging, then
-scans bin + SKU + qty for putaway. Each scan POSTs to a new
-`/api/v1/scan/*.php` endpoint that calls `lib/grn.php` →
-`grn_putaway_execute()` (or its receive equivalent). Idempotency is
-provided by client-generated `scan_uuid`s. Hold here until Phase 4
-deploys cleanly.
+Phase 6 builds **Sales Orders + Pick Lists desktop**: a sales user
+creates an SO against a customer + fulfilling warehouse with multi-tax
+line calculation (per `lib/tax.php`), the system warns on insufficient
+stock at confirmation, and a pick list is generated with a walk path
+sorted by zone → rack → bin code. Mobile pick lands in Phase 7. Hold
+here until Phase 5 deploys cleanly on Hostinger.

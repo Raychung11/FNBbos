@@ -53,8 +53,8 @@ $tasks = [
 $allowed = $tasks[$role] ?? [];
 
 $catalogue = [
-    'receive'     => ['Receive (GRN)',          '/m/receive.php',     'Phase 5'],
-    'putaway'     => ['Putaway',                '/m/putaway.php',     'Phase 5'],
+    'receive'     => ['Receive (GRN)',          '/m/receive.php',     'live'],
+    'putaway'     => ['Putaway',                '/m/putaway.php',     'live'],
     'pick'        => ['Pick',                   '/m/pick.php',        'Phase 7'],
     'transfer'    => ['Bin transfer',           '/m/transfer.php',    'Phase 11'],
     'iw_dispatch' => ['Inter-warehouse send',   '/m/iw_dispatch.php', 'Phase 11'],
@@ -110,11 +110,18 @@ $catalogue = [
 
   <div class="grid grid-cols-2 gap-3">
     <?php foreach ($allowed as $key):
-      [$label, $href, $phase] = $catalogue[$key]; ?>
+      [$label, $href, $phase] = $catalogue[$key];
+      $isLive = $phase === 'live';
+    ?>
       <a href="<?= e_($href) ?>"
-         class="block bg-white rounded-xl border border-gray-200 p-4 text-center active:bg-gray-100">
+         class="block rounded-xl border p-4 text-center transition <?=
+           $isLive ? 'bg-white border-gray-200 active:bg-gray-100'
+                   : 'bg-gray-50  border-dashed border-gray-300 opacity-70'
+         ?>">
         <div class="text-base font-semibold text-gray-900"><?= e_($label) ?></div>
-        <div class="text-xs text-gray-400 mt-1">ships in <?= e_($phase) ?></div>
+        <div class="text-xs <?= $isLive ? 'text-emerald-700' : 'text-gray-400' ?> mt-1">
+          <?= $isLive ? '● ready to scan' : 'ships in ' . e_($phase) ?>
+        </div>
       </a>
     <?php endforeach; ?>
   </div>

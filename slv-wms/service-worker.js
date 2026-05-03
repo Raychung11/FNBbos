@@ -2,11 +2,14 @@
 // Strategy: cache-first for static assets; network-first for /api/* JSON.
 // Bump CACHE_VERSION whenever shipping a new client build.
 
-const CACHE_VERSION = 'slvwms-v0.1.0';
+const CACHE_VERSION = 'slvwms-v0.5.0';
 const STATIC_ASSETS = [
   '/',
   '/m/login.php',
   '/m/home.php',
+  '/m/receive.php',
+  '/m/putaway.php',
+  '/assets/js/scanner.js',
   '/manifest.json',
   '/assets/img/icon-192.png',
   '/assets/img/icon-512.png'
