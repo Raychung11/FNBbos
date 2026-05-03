@@ -17,6 +17,14 @@ declare(strict_types=1);
  * deploy. We honour the user's intent by upgrading to Secure as soon as
  * HTTPS is detected (including via `X-Forwarded-Proto: https` from a
  * reverse proxy).
+ *
+ * Save-path behaviour: if a writable /storage/sessions/ exists we use it
+ * as the session save path. The default Hostinger save path is shared
+ * across users on the host and is GC-swept on the global
+ * session.gc_maxlifetime (1440s = 24 minutes), which expires WMS
+ * sessions in the middle of a form and produces a "CSRF token mismatch"
+ * error. A project-local path is firewalled by .htaccess and only swept
+ * by THIS app's GC policy (8 hours).
  */
 function session_boot(): void
 {
@@ -31,6 +39,19 @@ function session_boot(): void
             || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https')
             || ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443);
     $secure = $wantsSecure && $isHttps;
+
+    // Project-local session storage. dirname(__DIR__) here is the install root
+    // (e.g. /public_html/), so this lives at /storage/sessions/.
+    $sessionDir = dirname(__DIR__) . '/storage/sessions';
+    if (!is_dir($sessionDir)) {
+        @mkdir($sessionDir, 0700, true);
+    }
+    if (is_dir($sessionDir) && is_writable($sessionDir)) {
+        session_save_path($sessionDir);
+        // Also override the inherited gc_maxlifetime — Hostinger's default
+        // is 24 minutes which is way too short for a warehouse shift.
+        ini_set('session.gc_maxlifetime', '28800'); // 8 hours
+    }
 
     session_name($name);
     session_set_cookie_params([
