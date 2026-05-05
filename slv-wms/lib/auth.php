@@ -62,6 +62,14 @@ function session_boot(): void
         'samesite' => 'Lax',
     ]);
     session_start();
+
+    // Belt-and-braces no-cache for the HTTP layer. Dynamic pages render
+    // user-specific content (CSRF token, role banner, dashboard); we never
+    // want a proxy or browser keeping that body around for someone else.
+    if (!headers_sent()) {
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+    }
 }
 
 /**
