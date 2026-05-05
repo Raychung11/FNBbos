@@ -33,11 +33,11 @@ CREATE TABLE IF NOT EXISTS invoices (
   KEY idx_inv_customer (customer_id),
   KEY idx_inv_warehouse_status (warehouse_id, status),
   KEY idx_inv_date     (invoice_date),
-  CONSTRAINT fk_inv_company    FOREIGN KEY (company_id)   REFERENCES companies(id),
-  CONSTRAINT fk_inv_warehouse  FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
-  CONSTRAINT fk_inv_so         FOREIGN KEY (so_id)        REFERENCES sales_orders(id),
-  CONSTRAINT fk_inv_customer   FOREIGN KEY (customer_id)  REFERENCES customers(id),
-  CONSTRAINT fk_inv_created_by FOREIGN KEY (created_by)   REFERENCES users(id) ON DELETE SET NULL
+  CONSTRAINT fk_invoice_company    FOREIGN KEY (company_id)   REFERENCES companies(id),
+  CONSTRAINT fk_invoice_warehouse  FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+  CONSTRAINT fk_invoice_so         FOREIGN KEY (so_id)        REFERENCES sales_orders(id),
+  CONSTRAINT fk_invoice_customer   FOREIGN KEY (customer_id)  REFERENCES customers(id),
+  CONSTRAINT fk_invoice_created_by FOREIGN KEY (created_by)   REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
