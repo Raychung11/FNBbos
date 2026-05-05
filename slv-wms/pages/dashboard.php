@@ -243,9 +243,28 @@ function dashboard_view_for(string $role, array $counts): array
 
 $view = dashboard_view_for($role, $counts);
 
+// A monotonic-ish stamp so the operator can SEE the response is fresh.
+// If the time below doesn't change between reloads, the page is being
+// served from cache (browser HTTP cache or a stuck service worker).
+$renderedAt    = date('H:i:s');
+$renderedIsoTs = date('Y-m-d\TH:i:s');
+
 $PAGE_TITLE = 'Dashboard';
 require __DIR__ . '/../partials/header.php';
 ?>
+<!-- Fresh-render diagnostic. Time + user + role on the same line — if you
+     reload twice and the time doesn't move, the response is cached. -->
+<div class="mb-3 text-[11px] font-mono text-gray-500 bg-gray-100 border border-gray-200 rounded px-3 py-1 inline-flex items-center gap-3">
+  <span>rendered <strong class="text-gray-800"><?= e_($renderedAt) ?></strong></span>
+  <span>·</span>
+  <span>for <strong class="text-gray-800"><?= e_($user['email'] ?? '?') ?></strong></span>
+  <span>(<strong class="text-gray-800"><?= e_($role) ?></strong>)</span>
+  <span>·</span>
+  <span>uid=<?= e_((string)($user['id'] ?? '?')) ?></span>
+  <span>·</span>
+  <span>sw=v0.9.0</span>
+</div>
+
 <!-- Role-tinted identity banner. Different colour, copy and width per role. -->
 <div class="mb-6 rounded-lg border <?= e_($view['banner_class']) ?> px-4 py-3 flex flex-wrap items-center justify-between gap-3">
   <div>

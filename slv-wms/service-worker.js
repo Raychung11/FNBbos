@@ -1,25 +1,25 @@
 // SLV WMS — service-worker.js
 //
-// Caching strategy (rewritten v0.8.0 to fix a stale-page bug):
+// Caching strategy (v0.9.0 — aggressive cleanup of v0.7.0 leftovers):
 //
 //   /assets/* + /manifest.json + favicon       → cache-first (truly static)
 //   /api/*                                     → network-first, JSON only
-//   everything else (.php, /, dashboard, etc.) → NETWORK-FIRST, never serve a
-//                                                cached HTML body unless the
-//                                                network fails outright.
+//   everything else (.php, /, dashboard, etc.) → NETWORK-FIRST with
+//                                                cache: 'reload' so the
+//                                                browser HTTP cache is
+//                                                also bypassed (otherwise
+//                                                a v0.7.0-era cached
+//                                                /index.php with admin's
+//                                                HTML keeps coming back
+//                                                until the user manually
+//                                                clears their cache).
 //
-// Why: the previous version cache-first'd EVERY GET, including dashboard and
-// login responses. Once admin visited /index.php once, that admin-rendered
-// HTML was returned forever — even when a different user was signed in. The
-// symptom was "all roles see the super admin dashboard". A .php page is
-// dynamic by definition; we must hit the server.
-//
-// Bump CACHE_VERSION whenever shipping a new client build so old caches are
-// purged on the next activation.
+// Plus on every dynamic-page GET we proactively delete that URL from
+// every cache the SW owns — so any leftover from an older SW version
+// drops on first visit instead of waiting for activate.
 
-const CACHE_VERSION = 'slvwms-v0.8.0';
+const CACHE_VERSION = 'slvwms-v0.9.0';
 
-// Truly static assets — safe to cache aggressively.
 const STATIC_ASSETS = [
   '/assets/js/scanner.js',
   '/manifest.json',
@@ -37,8 +37,6 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Wipe every old cache. This drops the bad cache-first entries from
-  // earlier versions on first activation.
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
@@ -49,9 +47,20 @@ self.addEventListener('activate', (event) => {
 
 function isStatic(url) {
   if (url.pathname.startsWith('/assets/')) return true;
-  if (url.pathname === '/manifest.json')  return true;
-  if (url.pathname === '/favicon.ico')    return true;
+  if (url.pathname === '/manifest.json')   return true;
+  if (url.pathname === '/favicon.ico')     return true;
   return false;
+}
+
+// Wipe a URL from every cache the SW currently owns. Used to evict
+// leftover entries from older SW versions on the way past.
+async function wipeFromAllCaches(req) {
+  const keys = await caches.keys();
+  await Promise.all(keys.map(async (k) => {
+    const c = await caches.open(k);
+    await c.delete(req);
+    await c.delete(new Request(req.url, { method: 'GET' }));
+  }));
 }
 
 self.addEventListener('fetch', (event) => {
@@ -60,7 +69,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // 1) Static assets — cache-first, fall through to network on miss.
+  // 1) Static assets — cache-first.
   if (isStatic(url)) {
     event.respondWith(
       caches.match(req).then((hit) => {
@@ -77,10 +86,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2) /api/* JSON — network-first, fall back to cache only if offline.
-  //    We DO put successful JSON in the cache so the phone has *something*
-  //    to render when the network drops mid-walk; the actual scan POSTs
-  //    are still rejected offline (idempotent retry on next reconnect).
+  // 2) /api/* JSON — network-first, cache as offline fallback.
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(req)
@@ -96,16 +102,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3) Everything else — including all .php pages, the bare /, /m/*, etc.
-  //    NETWORK-FIRST. We do NOT save the HTML body in cache because it's
-  //    user-specific (CSRF token, session-derived nav, role banner) and
-  //    serving it to a different user would leak / confuse. Falling back
-  //    to cache here would re-introduce the v0.7.0 bug.
-  event.respondWith(
-    fetch(req).catch(() => {
-      // True offline — return a minimal text response so the browser shows
-      // *something* instead of "no internet". The user can reload when
-      // they're back online.
+  // 3) Everything else (dynamic .php). NEVER cache, NEVER touch the
+  //    browser HTTP cache. cache:'reload' tells fetch() to ignore the
+  //    browser HTTP cache entirely and revalidate from the origin —
+  //    this is the lever that finally evicts leftover admin-rendered
+  //    /index.php from earlier SW versions.
+  event.respondWith((async () => {
+    // Sweep this URL out of any cache the SW still has.
+    await wipeFromAllCaches(req);
+    try {
+      return await fetch(req, { cache: 'reload', credentials: 'same-origin' });
+    } catch (_) {
       return new Response(
         '<!doctype html><meta charset=utf-8><title>Offline</title>' +
         '<body style="font-family:system-ui;padding:24px;color:#1f2937;">' +
@@ -113,6 +120,6 @@ self.addEventListener('fetch', (event) => {
         'Reconnect and reload.</p>',
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 }
       );
-    })
-  );
+    }
+  })());
 });
