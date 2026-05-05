@@ -289,10 +289,7 @@ function receiveApp() {
   };
 }
 
-// Service worker.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
-}
 </script>
+<?php require __DIR__ . '/../partials/sw_bootstrap.php'; ?>
 </body>
 </html>

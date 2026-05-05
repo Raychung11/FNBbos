@@ -10,5 +10,6 @@
     <span>&copy; <?= e_(date('Y')) ?></span>
   </div>
 </footer>
+<?php require __DIR__ . '/sw_bootstrap.php'; ?>
 </body>
 </html>

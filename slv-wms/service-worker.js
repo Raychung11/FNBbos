@@ -18,7 +18,7 @@
 // every cache the SW owns — so any leftover from an older SW version
 // drops on first visit instead of waiting for activate.
 
-const CACHE_VERSION = 'slvwms-v0.9.0';
+const CACHE_VERSION = 'slvwms-v1.0.0';
 
 const STATIC_ASSETS = [
   '/assets/js/scanner.js',
@@ -37,12 +37,21 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    // Wipe every old cache. Drops cache-first entries from earlier
+    // versions on first activation.
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)));
+    await self.clients.claim();
+
+    // Tell every open tab "I just took over — reload yourself so the
+    // user sees fresh HTML rendered by the *new* SW, not the leftover
+    // body served by the previous SW seconds earlier."
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of clients) {
+      try { c.postMessage({ type: 'SLV_SW_ACTIVATED', version: CACHE_VERSION }); } catch (_) {}
+    }
+  })());
 });
 
 function isStatic(url) {

@@ -262,7 +262,7 @@ require __DIR__ . '/../partials/header.php';
   <span>·</span>
   <span>uid=<?= e_((string)($user['id'] ?? '?')) ?></span>
   <span>·</span>
-  <span>sw=v0.9.0</span>
+  <span>sw=v1.0.0</span>
 </div>
 
 <!-- Role-tinted identity banner. Different colour, copy and width per role. -->
