@@ -23,9 +23,9 @@ include __DIR__ . '/partials/site-header.php';
     <h1 class="hero__title">Run your F&amp;B group with finance-grade confidence.</h1>
     <p class="hero__sub">
       Centralise sales from every delivery platform, calculate SST and platform
-      fees automatically, reconcile bank settlements, and catch suspicious
-      claims before they hit your bottom line — built for Malaysian F&amp;B
-      groups operating multiple brands and outlets.
+      fees automatically, reconcile bank settlements, read receipts with OCR,
+      and predict where margin will leak — before it hits your bottom line.
+      Built for Malaysian F&amp;B groups operating multiple brands and outlets.
     </p>
     <div class="hero__cta">
       <a class="btn btn--primary btn--lg" href="#demo">Request a demo</a>
@@ -33,9 +33,11 @@ include __DIR__ . '/partials/site-header.php';
     </div>
     <div class="hero__badges">
       <span>Configurable SST (0% / 6% / 8% / custom)</span>
-      <span>Multi-brand, multi-outlet</span>
-      <span>WhatsApp alerts via Evolution API</span>
-      <span>Built-in audit trail</span>
+      <span>OCR receipt reading</span>
+      <span>Sales forecasting</span>
+      <span>Profit-leakage prediction</span>
+      <span>Platform API sync</span>
+      <span>WhatsApp &amp; email alerts</span>
     </div>
   </div>
 </section>
@@ -71,18 +73,20 @@ include __DIR__ . '/partials/site-header.php';
     <div class="section__head">
       <span class="section__eyebrow">What you get</span>
       <h2 class="section__title">Everything finance needs, nothing they don't.</h2>
-      <p class="section__lead">Eight production-grade modules. Every fee, every tax rate, every approval limit is configurable — never hard-coded.</p>
+      <p class="section__lead">A full operating system — every fee, tax rate and approval limit configurable, never hard-coded. Plus an automation &amp; prediction layer that does the watching for you.</p>
     </div>
+
+    <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:1px;color:var(--site-ink-soft);margin:0 0 16px;">Core finance</h3>
     <div class="feature-grid">
       <div class="feature">
         <div class="feature__icon">⤓</div>
-        <h3>Centralised sales import</h3>
-        <p>One CSV format, every platform: GrabFood, Foodpanda, ShopeeFood, POS, Website, WhatsApp, Manual, Catering, plus any custom platform.</p>
+        <h3>Centralised sales</h3>
+        <p>CSV upload or direct platform API sync: GrabFood, Foodpanda, ShopeeFood, POS, Website, WhatsApp, Manual, Catering, plus any custom platform.</p>
       </div>
       <div class="feature">
         <div class="feature__icon">%</div>
         <h3>Configurable fee engine</h3>
-        <p>Per-platform commission, payment-gateway fee, fixed fee, and treatment of vouchers / delivery / refunds. Effective-dated rules — old rates stay as audit history.</p>
+        <p>Per-platform commission, payment-gateway fee, fixed fee, and treatment of vouchers / delivery / refunds. Effective-dated — old rates stay as audit history.</p>
       </div>
       <div class="feature">
         <div class="feature__icon">∑</div>
@@ -92,27 +96,51 @@ include __DIR__ . '/partials/site-header.php';
       <div class="feature">
         <div class="feature__icon">⇄</div>
         <h3>Bank reconciliation</h3>
-        <p>Upload bank statements. The system matches credits to expected platform settlements grouped by platform / outlet / date and flags underpayments and missing settlements.</p>
-      </div>
-      <div class="feature">
-        <div class="feature__icon">⚠</div>
-        <h3>AI-style claim risk scoring</h3>
-        <p>Every claim gets a 0–100 score from ten signals: amount anomaly, frequency, duplicate receipts, split claims, supplier patterns, time anomaly, budget burn, role mismatch, OCR mismatch, profit impact. Each score comes with a plain-English explanation.</p>
+        <p>Upload bank statements. The system matches credits to expected settlements grouped by platform / outlet / date and flags underpayments and missing money.</p>
       </div>
       <div class="feature">
         <div class="feature__icon">✓</div>
-        <h3>Approval workflow</h3>
+        <h3>Claim workflow</h3>
         <p>Configurable approval matrix. Below RM100 → Outlet Manager. Above RM2,000 → Director. Critical-risk claims auto-route to Finance. All configurable per claim type.</p>
-      </div>
-      <div class="feature">
-        <div class="feature__icon">◔</div>
-        <h3>WhatsApp &amp; email alerts</h3>
-        <p>Critical claims, missing settlements, budget overruns, abnormal purchases — pushed to your team via Evolution API or email.</p>
       </div>
       <div class="feature">
         <div class="feature__icon">◫</div>
         <h3>Reports &amp; audit trail</h3>
         <p>Daily sales, platform settlement, claim summary, abnormal claims, outlet profit. CSV export ready. Append-only audit log on every state change.</p>
+      </div>
+    </div>
+
+    <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:1px;color:var(--site-ink-soft);margin:36px 0 16px;">Automation &amp; prediction</h3>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature__icon">◎</div>
+        <h3>OCR receipt reading</h3>
+        <p>Receipts are read on upload — merchant, date, total, SST, items. The system compares the receipt against the claim and flags mismatches automatically.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">⚠</div>
+        <h3>Claim risk scoring + AI explanation</h3>
+        <p>Every claim scored 0–100 across ten signals (amount, frequency, duplicate receipts, split claims, supplier patterns, time, budget burn, role mismatch, OCR mismatch, profit impact) with a plain-English, optionally AI-written explanation.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">↗</div>
+        <h3>Sales forecasting</h3>
+        <p>Day-of-week seasonality + trend projects the next 7–60 days per outlet or platform, with a confidence band and a month-end claim-spend projection.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">⌖</div>
+        <h3>Profit-leakage prediction</h3>
+        <p>Predicts which outlets, platforms and claim categories are trending toward losses — outlet margin at risk, growing platform discrepancies, runaway claim categories, budget burn — ranked by projected RM impact.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">⟲</div>
+        <h3>Platform API sync</h3>
+        <p>Pull orders straight from delivery platforms on a date range — no CSV. Pluggable adapters; runs the same fee + tax + reconciliation pipeline as manual import.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__icon">◔</div>
+        <h3>WhatsApp &amp; email alerts</h3>
+        <p>Critical claims, settlement mismatches, missing settlements, budget overruns and abnormal purchases — pushed to finance via Evolution API or email, with an in-app inbox.</p>
       </div>
     </div>
   </div>
@@ -135,8 +163,8 @@ include __DIR__ . '/partials/site-header.php';
         <p>Plug in your platform fee rates, tax profiles and approval matrix. We ship sensible defaults — tweak only what's different.</p>
       </div>
       <div class="step">
-        <h3>Operate &amp; monitor</h3>
-        <p>Upload sales, sync bank statements, log claims. The dashboard surfaces leakage, suspicious claims and loss-making outlets in real time.</p>
+        <h3>Operate &amp; predict</h3>
+        <p>Sync sales, reconcile bank, log claims. The system forecasts revenue, scores every claim, reads receipts and tells you where margin will leak next — before it does.</p>
       </div>
     </div>
   </div>
@@ -151,7 +179,8 @@ include __DIR__ . '/partials/site-header.php';
         <p>Tell us about your group. We'll set up a sandbox tenant with your outlets pre-configured and walk you through a live reconciliation in under 30 minutes.</p>
         <ul>
           <li>Sandbox tenant with sample data</li>
-          <li>Live walkthrough of sales import + risk scoring</li>
+          <li>Live walkthrough: sales sync, OCR, risk scoring</li>
+          <li>See the forecast &amp; leakage prediction on your numbers</li>
           <li>Custom fee rules for the platforms you actually use</li>
           <li>No credit card, no commitment</li>
         </ul>
