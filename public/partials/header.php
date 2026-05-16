@@ -20,6 +20,8 @@ $active = $active ?? '';
   <span class="tag">Malaysian F&amp;B • Multi-outlet</span>
   <nav>
     <a href="<?= e(url('pages/dashboard.php')) ?>"       class="<?= $active==='dashboard'?'active':'' ?>">Dashboard</a>
+    <a href="<?= e(url('pages/notifications.php')) ?>"   class="<?= $active==='notifications'?'active':'' ?>">Notifications</a>
+    <a href="<?= e(url('pages/account.php')) ?>"         class="<?= $active==='account'?'active':'' ?>">My Account</a>
     <div class="section">Sales</div>
     <a href="<?= e(url('pages/sales-import.php')) ?>"    class="<?= $active==='sales-import'?'active':'' ?>">Sales Import</a>
     <a href="<?= e(url('pages/sales-list.php')) ?>"      class="<?= $active==='sales-list'?'active':'' ?>">Sales Orders</a>
@@ -54,12 +56,47 @@ $active = $active ?? '';
   </nav>
 </aside>
 <div class="main">
+  <?php
+  // Unread notification count for the bell (scoped to me + company-wide).
+  $unread = 0;
+  try {
+      $uStmt = db()->prepare('SELECT COUNT(*) FROM notifications n
+          WHERE n.read_at IS NULL AND ((n.user_id = ?) OR (n.user_id IS NULL AND n.company_id = ?))');
+      $uStmt->execute([Auth::id(), Auth::companyId()]);
+      $unread = (int)$uStmt->fetchColumn();
+  } catch (\Throwable $e) { /* notifications table optional on first run */ }
+
+  $isSuper = Rbac::isSuperAdmin();
+  if ($isSuper) {
+      try {
+          $companies = db()->query('SELECT id, name FROM companies ORDER BY name')->fetchAll();
+      } catch (\Throwable $e) { $companies = []; }
+      $activeCompany = Auth::companyId();
+  }
+  $curPath = 'pages/' . basename($_SERVER['SCRIPT_NAME'] ?? 'dashboard.php');
+  ?>
   <div class="topbar">
     <div class="scope">
       <strong><?= e($pageTitle) ?></strong>
+      <?php if ($isSuper && !empty($companies)): ?>
+        <form method="post" action="<?= e(url('switch-company.php')) ?>" style="display:inline-block;margin-left:14px;">
+          <?= \FNBBOS\Csrf::field() ?>
+          <input type="hidden" name="back" value="<?= e($curPath) ?>">
+          <select name="company_id" onchange="this.form.submit()" title="Operating tenant">
+            <?php foreach ($companies as $c): ?>
+              <option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === $activeCompany ? 'selected' : '' ?>>
+                <?= e($c['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </form>
+      <?php endif; ?>
     </div>
     <div class="who">
-      Signed in as <strong><?= e(Auth::user()['name'] ?? '') ?></strong>
+      <a href="<?= e(url('pages/notifications.php')) ?>" title="Notifications">
+        🔔<?php if ($unread > 0): ?> <span class="badge badge--err"><?= $unread > 99 ? '99+' : $unread ?></span><?php endif; ?>
+      </a>
+      Signed in as <a href="<?= e(url('pages/account.php')) ?>"><strong><?= e(Auth::user()['name'] ?? '') ?></strong></a>
       <span class="badge badge--muted"><?= e(Rbac::role()) ?></span>
       <a href="<?= e(url('logout.php')) ?>">Logout</a>
     </div>

@@ -97,9 +97,39 @@ final class Auth
         return (int)($_SESSION['auth']['id'] ?? 0);
     }
 
+    /**
+     * Effective company scope. A Super Admin operating the SaaS can switch
+     * the active company via the topbar; that override is honoured here so
+     * every scoped query follows the selection. Non-super-admins are always
+     * pinned to their own company.
+     */
     public static function companyId(): int
     {
+        if (Rbac::isSuperAdmin() && !empty($_SESSION['auth']['active_company_id'])) {
+            return (int)$_SESSION['auth']['active_company_id'];
+        }
         return (int)($_SESSION['auth']['company_id'] ?? 0);
+    }
+
+    /** The user's home company (ignores any Super Admin switch). */
+    public static function homeCompanyId(): int
+    {
+        return (int)($_SESSION['auth']['company_id'] ?? 0);
+    }
+
+    /** Super Admin only: switch the active company scope. */
+    public static function setActiveCompany(?int $companyId): void
+    {
+        if (!Rbac::isSuperAdmin()) return;
+        if ($companyId === null) {
+            unset($_SESSION['auth']['active_company_id']);
+            return;
+        }
+        $stmt = \db()->prepare('SELECT 1 FROM companies WHERE id = ?');
+        $stmt->execute([$companyId]);
+        if ($stmt->fetchColumn()) {
+            $_SESSION['auth']['active_company_id'] = $companyId;
+        }
     }
 
     public static function outletId(): ?int

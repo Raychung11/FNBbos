@@ -95,7 +95,10 @@ foreach ($matches as $m) {
         if ($age >= $delayDays) $missing[] = $m;
     }
 }
-if ($missing && requestMethod() === 'POST') {
+// Fire the alert only when finance explicitly clicks "Match" (GET marker).
+// Firing on every page load would spam; the POST upload path redirects
+// before reaching here so it can't be used as the trigger.
+if ($missing && (string)input('do') === 'match') {
     $lines = array_map(fn($m) => sprintf('• %s platform#%d outlet#%d expected=%s received=%s',
         $m['settle_date'], $m['platform_id'], $m['outlet_id'],
         money((float)$m['expected']), money((float)$m['received'])), $missing);
@@ -125,6 +128,7 @@ include __DIR__ . '/../partials/header.php';
 </div>
 
 <form method="get" class="card toolbar">
+  <input type="hidden" name="do" value="match">
   <div class="form-row"><label>From</label><input type="date" name="from" value="<?= e($from) ?>"></div>
   <div class="form-row"><label>To</label><input type="date" name="to" value="<?= e($to) ?>"></div>
   <button class="btn btn--primary" type="submit">Match</button>
