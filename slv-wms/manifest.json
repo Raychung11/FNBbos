@@ -1,0 +1,25 @@
+{
+  "name": "SLV WMS",
+  "short_name": "SLV WMS",
+  "description": "SLV Group warehouse management — barcode scanning, receive, putaway, pick, transfer.",
+  "start_url": "/m/home.php",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#6D28D9",
+  "icons": [
+    {
+      "src": "/assets/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

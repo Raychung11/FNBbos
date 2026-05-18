@@ -1,0 +1,12 @@
+/config/config.php
+/storage/uploads/*
+/storage/exports/*
+!/storage/uploads/.gitkeep
+!/storage/exports/.gitkeep
+/vendor/
+/node_modules/
+*.log
+.env
+.DS_Store
+.idea/
+.vscode/

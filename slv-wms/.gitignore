@@ -1,0 +1,16 @@
+config/app.php
+storage/logs/*
+!storage/logs/.gitkeep
+storage/invoices/*
+!storage/invoices/.gitkeep
+storage/pods/*
+!storage/pods/.gitkeep
+storage/sessions/*
+!storage/sessions/.gitkeep
+!storage/sessions/.htaccess
+storage/imports/*
+!storage/imports/.gitkeep
+uploads/*
+!uploads/.gitkeep
+*.log
+.DS_Store
