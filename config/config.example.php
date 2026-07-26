@@ -33,7 +33,7 @@ return [
         'uploads' => __DIR__ . '/../storage/uploads',
         'exports' => __DIR__ . '/../storage/exports',
         'max_upload_mb' => 8,
-        'allowed_receipt_ext' => ['pdf','jpg','jpeg','png','webp','heic'],
+        'allowed_receipt_ext' => ['jpg','jpeg','png','webp','heic'],
         'allowed_csv_ext'     => ['csv','xlsx','xls'],
     ],
     'notifications' => [

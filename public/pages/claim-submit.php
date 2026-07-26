@@ -32,16 +32,29 @@ if (requestMethod() === 'POST') {
         redirect('pages/claim-submit.php');
     }
 
-    // Receipt upload
+    // Receipt upload. Images only — PDFs and other formats are hard-rejected
+    // regardless of what allowed_receipt_ext holds, so tenants who haven't
+    // pulled the new config still get the enforcement.
     $receiptPath = null;
     $receiptHash = null;
     if (!empty($_FILES['receipt']['name']) && $_FILES['receipt']['error'] === UPLOAD_ERR_OK) {
-        $allowed = (array)config('storage.allowed_receipt_ext');
+        $imageOnly = ['jpg','jpeg','png','webp','heic'];
+        $allowed   = array_values(array_intersect((array)config('storage.allowed_receipt_ext', $imageOnly), $imageOnly));
+        if (!$allowed) $allowed = $imageOnly;
+
         $ext = strtolower(pathinfo($_FILES['receipt']['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $allowed, true)) {
-            flash('error', 'Receipt file type not allowed.');
+            flash('error', 'Please upload an image of the receipt (JPG, PNG, WEBP or HEIC). PDFs are not accepted.');
             redirect('pages/claim-submit.php');
         }
+
+        // Double-check by MIME sniff — filenames can lie.
+        $mime = @mime_content_type($_FILES['receipt']['tmp_name']) ?: '';
+        if ($mime !== '' && !str_starts_with($mime, 'image/')) {
+            flash('error', 'The uploaded file is not an image.');
+            redirect('pages/claim-submit.php');
+        }
+
         $maxBytes = (int)config('storage.max_upload_mb', 8) * 1024 * 1024;
         if ($_FILES['receipt']['size'] > $maxBytes) {
             flash('error', 'Receipt file too large.');
@@ -227,9 +240,9 @@ include __DIR__ . '/../partials/header.php';
     </div>
     <div class="form-row"><label>Cost center</label><input type="text" name="cost_center"></div>
     <div class="form-row" style="grid-column: 1 / -1;"><label>Description</label><textarea name="description" placeholder="What was this for?"></textarea></div>
-    <div class="form-row" style="grid-column: 1 / -1;"><label>Receipt</label>
-      <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic">
-      <span class="hint">Hash is captured to detect duplicate receipts.</span>
+    <div class="form-row" style="grid-column: 1 / -1;"><label>Receipt (image only)</label>
+      <input type="file" name="receipt" accept="image/*,.heic" capture="environment">
+      <span class="hint">Snap a photo of the receipt with your phone camera, or upload an image (JPG / PNG / WEBP / HEIC). PDFs are not accepted — the OCR engine works best on images.</span>
     </div>
     <div class="form-row" style="align-self:end;"><button class="btn btn--primary" type="submit">Submit claim</button></div>
   </form>
