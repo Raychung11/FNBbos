@@ -20,6 +20,7 @@ $active = $active ?? '';
   <span class="tag">Malaysian F&amp;B • Multi-outlet</span>
   <nav>
     <a href="<?= e(url('pages/dashboard.php')) ?>"       class="<?= $active==='dashboard'?'active':'' ?>">Dashboard</a>
+    <a href="<?= e(url('pages/quick-entry.php')) ?>"     class="<?= $active==='quick-entry'?'active':'' ?>">Quick Entry (text)</a>
     <a href="<?= e(url('pages/notifications.php')) ?>"   class="<?= $active==='notifications'?'active':'' ?>">Notifications</a>
     <a href="<?= e(url('pages/account.php')) ?>"         class="<?= $active==='account'?'active':'' ?>">My Account</a>
     <div class="section">Sales</div>
@@ -92,6 +93,20 @@ $active = $active ?? '';
         </form>
       <?php endif; ?>
     </div>
+
+    <?php // Global quick-entry bar — routes to pages/quick-entry.php parse step. ?>
+    <form method="get" action="<?= e(url('pages/quick-entry.php')) ?>" style="display:flex;gap:6px;align-items:center;flex:1;max-width:520px;margin:0 20px;">
+      <input type="hidden" name="do" value="parse">
+      <select name="type" title="Quick entry target" style="padding:6px 8px;border-radius:6px;border:1px solid var(--panel-border);font-size:12px;">
+        <option value="claim">Claim</option>
+        <option value="sales">Sales</option>
+        <option value="bank">Bank</option>
+      </select>
+      <input type="text" name="text" placeholder="Quick entry: e.g. petrol RM 45 KL-01 shell yesterday"
+             style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--panel-border);font-size:13px;">
+      <button class="btn btn--ghost btn--sm" type="submit" title="Parse">→</button>
+    </form>
+
     <div class="who">
       <a href="<?= e(url('pages/notifications.php')) ?>" title="Notifications">
         🔔<?php if ($unread > 0): ?> <span class="badge badge--err"><?= $unread > 99 ? '99+' : $unread ?></span><?php endif; ?>
